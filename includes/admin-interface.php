@@ -8,8 +8,6 @@ class Vettryx_WP_Architect_Admin {
     public function __construct() {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
-        
-        // Hook que dispara logo após a opção ser salva no banco para fazer a migração dos dados
         add_action('update_option_vtx_dynamic_entities', [$this, 'migrate_database_entities'], 10, 2);
     }
 
@@ -34,24 +32,18 @@ class Vettryx_WP_Architect_Admin {
             $old_cpt = !empty($e['old_cpt_slug']) ? sanitize_title($e['old_cpt_slug']) : '';
             $new_cpt = !empty($e['cpt_slug']) ? sanitize_title($e['cpt_slug']) : '';
 
-            // 1. Migração do Post Type e Taxonomias (Se o slug principal mudou)
             if ($old_cpt && $new_cpt && $old_cpt !== $new_cpt) {
-                // Atualiza a tabela wp_posts
                 $wpdb->update($wpdb->posts, ['post_type' => $new_cpt], ['post_type' => $old_cpt]);
-                
-                // Atualiza a tabela wp_term_taxonomy (Categorias e Tags atreladas)
                 $wpdb->update($wpdb->term_taxonomy, ['taxonomy' => $new_cpt . '_category'], ['taxonomy' => $old_cpt . '_category']);
                 $wpdb->update($wpdb->term_taxonomy, ['taxonomy' => $new_cpt . '_tag'], ['taxonomy' => $old_cpt . '_tag']);
             }
 
-            // 2. Migração dos Meta Boxes / Campos Personalizados
             if (!empty($e['fields'])) {
                 foreach ($e['fields'] as $f) {
                     $old_id = !empty($f['old_id']) ? sanitize_text_field($f['old_id']) : '';
                     $new_id = !empty($f['id']) ? sanitize_text_field($f['id']) : '';
 
                     if ($old_id && $new_id && $old_id !== $new_id) {
-                        // Atualiza a tabela wp_postmeta
                         $wpdb->update($wpdb->postmeta, ['meta_key' => $new_id], ['meta_key' => $old_id]);
                     }
                 }
@@ -76,9 +68,12 @@ class Vettryx_WP_Architect_Admin {
 
                 <div id="vtx-entities-container"></div>
 
-                <div style="margin-top: 20px;">
-                    <button type="button" class="button button-secondary" id="btn-add-entity">+ Adicionar Nova Entidade (CPT)</button>
-                    <?php submit_button('Salvar Estruturas', 'primary', 'submit', false, ['style' => 'float: right;']); ?>
+                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <button type="button" class="button button-secondary" id="btn-add-entity">+ Adicionar Nova Entidade</button>
+                        <button type="button" class="button" id="btn-import-legacy" style="margin-left: 10px; color: #0073aa; border-color: #0073aa;">⚡ Importar Legado (Portfolio & Gallery)</button>
+                    </div>
+                    <?php submit_button('Salvar Estruturas', 'primary', 'submit', false); ?>
                 </div>
             </form>
         </div>
@@ -104,6 +99,7 @@ class Vettryx_WP_Architect_Admin {
         document.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('vtx-entities-container');
             const btnAddEntity = document.getElementById('btn-add-entity');
+            const btnImportLegacy = document.getElementById('btn-import-legacy');
             const hiddenInput = document.getElementById('vtx_dynamic_entities');
             const form = document.getElementById('vtx-architect-form');
 
@@ -196,6 +192,40 @@ class Vettryx_WP_Architect_Admin {
             function render() { container.innerHTML = entities.map((e, i) => entityTemplate(e, i)).join(''); }
 
             btnAddEntity.addEventListener('click', () => { entities.push({ fields: [] }); render(); });
+
+            // Lógica do Importador Legado Automático
+            btnImportLegacy.addEventListener('click', () => {
+                if(!confirm('Deseja injetar as estruturas completas do Fast Gallery, Projects e Skills no construtor?')) return;
+                
+                const legacyPortfolio = {
+                    old_cpt_slug: '', cpt_slug: 'projects', cpt_name_plural: 'Projetos', cpt_name_singular: 'Projeto', icon: 'dashicons-portfolio',
+                    cat_slug: '', cat_name: '', tag_slug: '', tag_name: '',
+                    fields: [
+                        { old_id: '', id: 'project_url', label: 'URL do Projeto', type: 'url' },
+                        { old_id: '', id: 'project_company', label: 'Nome da Empresa/Cliente', type: 'text' }
+                    ]
+                };
+
+                const legacyGallery = {
+                    old_cpt_slug: '', cpt_slug: 'vtx_gallery', cpt_name_plural: 'Meus Trabalhos', cpt_name_singular: 'Trabalho/Álbum', icon: 'dashicons-format-gallery',
+                    cat_slug: 'tipo-servico', cat_name: 'Tipos de Serviço', tag_slug: 'detalhe-servico', tag_name: 'Serviços Detalhados',
+                    fields: [
+                        { old_id: '', id: 'vtx_service_desc', label: 'Descrição do Serviço', type: 'textarea' },
+                        { old_id: '', id: 'vtx_service_location', label: 'Local (Opcional)', type: 'text' },
+                        { old_id: '', id: 'vtx_gallery_before', label: 'Fotos do Antes', type: 'gallery' },
+                        { old_id: '', id: 'vtx_gallery_after', label: 'Fotos do Depois', type: 'gallery' }
+                    ]
+                };
+
+                const legacySkills = {
+                    old_cpt_slug: '', cpt_slug: 'skills', cpt_name_plural: 'Skills', cpt_name_singular: 'Skill', icon: 'dashicons-welcome-learn-more',
+                    cat_slug: '', cat_name: '', tag_slug: '', tag_name: '', fields: []
+                };
+
+                entities.push(legacyPortfolio, legacyGallery, legacySkills);
+                render();
+                alert('Estruturas importadas com sucesso! Role a tela e clique no botão azul "Salvar Estruturas" para aplicar no banco de dados.');
+            });
 
             container.addEventListener('click', function(e) {
                 if (e.target.classList.contains('btn-remove-entity')) {
