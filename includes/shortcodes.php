@@ -40,6 +40,24 @@ class Vettryx_WP_Architect_Shortcodes {
                     $a = shortcode_atts(['id' => ''], $atts);
                     return Vettryx_WP_Architect_Shortcodes::format_taxonomy(!empty($a['id']) ? intval($a['id']) : get_the_ID(), $cat_tax, 'category');
                 });
+                
+                // NOVO: Shortcode para a Capa da Categoria (Ex: [vtx_projetos_categoria_capa])
+                add_shortcode("vtx_{$cpt_slug}_categoria_capa", function($atts) use ($cat_tax) {
+                    $a = shortcode_atts(['id' => ''], $atts);
+                    $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
+                    if (!$post_id) return '';
+                    
+                    $terms = get_the_terms($post_id, $cat_tax);
+                    if ($terms && !is_wp_error($terms)) {
+                        $term = $terms[0]; // Pega a primeira categoria atrelada ao post
+                        $image_id = get_term_meta($term->term_id, 'vtx_tax_image', true);
+                        if ($image_id) {
+                            $img_url = wp_get_attachment_image_url($image_id, 'large');
+                            return '<img src="'.esc_url($img_url).'" alt="' . esc_attr($term->name) . '" class="vtx-sc-cat-image" style="width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 8px; display: block;">';
+                        }
+                    }
+                    return '';
+                });
             }
 
             if (!empty($e['tag_slug'])) {
