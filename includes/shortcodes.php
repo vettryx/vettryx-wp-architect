@@ -1,14 +1,36 @@
+/**
+ * Vettryx WP Architect Shortcodes
+ * 
+ * Gerencia os shortcodes dinâmicos para CPTs e Taxonomias
+ * 
+ * @package Vettryx_WP_Architect
+ * @since 1.0.0
+ */
+
 <?php
+
+// Segurança: Impede acesso direto ao arquivo
 if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Classe principal dos shortcodes dinâmicos
+ */
 class Vettryx_WP_Architect_Shortcodes {
 
+    /**
+     * Construtor da classe
+     */
     public function __construct() {
         add_action('init', [$this, 'register_dynamic_shortcodes']);
     }
 
+    /**
+     * Registra os shortcodes dinâmicos baseados nas entidades cadastradas
+     * 
+     * @return void
+     */
     public function register_dynamic_shortcodes() {
         $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
         if (!is_array($entities)) return;
@@ -41,7 +63,7 @@ class Vettryx_WP_Architect_Shortcodes {
                     return Vettryx_WP_Architect_Shortcodes::format_taxonomy(!empty($a['id']) ? intval($a['id']) : get_the_ID(), $cat_tax, 'category');
                 });
                 
-                // NOVO: Shortcode para a Capa da Categoria (Ex: [vtx_projetos_categoria_capa])
+                // Shortcode para a Capa da Categoria (Ex: [vtx_projetos_categoria_capa])
                 add_shortcode("vtx_{$cpt_slug}_categoria_capa", function($atts) use ($cat_tax) {
                     $a = shortcode_atts(['id' => ''], $atts);
                     $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
@@ -60,6 +82,7 @@ class Vettryx_WP_Architect_Shortcodes {
                 });
             }
 
+            // 3. Tags
             if (!empty($e['tag_slug'])) {
                 $tag_tax = $cpt_slug . '_tag';
                 add_shortcode("vtx_{$cpt_slug}_tags", function($atts) use ($tag_tax) {
@@ -68,7 +91,7 @@ class Vettryx_WP_Architect_Shortcodes {
                 });
             }
 
-            // 3. Página de Arquivo (Global)
+            // Página de Arquivo (Global)
             add_shortcode("vtx_{$cpt_slug}_arquivo_titulo", function() use ($e, $cpt_slug) {
                 if (is_tax($cpt_slug . '_category') || is_tax($cpt_slug . '_tag')) {
                     $term = get_queried_object();
@@ -77,6 +100,7 @@ class Vettryx_WP_Architect_Shortcodes {
                 return !empty($e['archive_title']) ? esc_html($e['archive_title']) : esc_html($e['cpt_name_plural']);
             });
 
+            // Página de Arquivo (Global) - Descrição
             add_shortcode("vtx_{$cpt_slug}_arquivo_descricao", function() use ($e, $cpt_slug) {
                 if (is_tax($cpt_slug . '_category') || is_tax($cpt_slug . '_tag')) {
                     $term = get_queried_object();
@@ -87,6 +111,13 @@ class Vettryx_WP_Architect_Shortcodes {
         }
     }
 
+    /**
+     * Formata o valor de um campo baseado no tipo
+     * 
+     * @param string $value Valor do campo
+     * @param string $type Tipo do campo
+     * @return string Valor formatado
+     */
     public static function format_output($value, $type) {
         switch ($type) {
             case 'url': return '<a href="' . esc_url($value) . '" class="vtx-sc-url" target="_blank" rel="noopener">' . esc_url($value) . '</a>';
@@ -105,6 +136,14 @@ class Vettryx_WP_Architect_Shortcodes {
         }
     }
 
+    /**
+     * Formata a taxonomia de um post
+     * 
+     * @param int $post_id ID do post
+     * @param string $taxonomy Nome da taxonomia
+     * @param string $type Tipo da taxonomia (category ou tag)
+     * @return string Taxonomia formatada
+     */
     public static function format_taxonomy($post_id, $taxonomy, $type) {
         if (!$post_id) return '';
         $terms = get_the_terms($post_id, $taxonomy);
