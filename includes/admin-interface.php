@@ -160,7 +160,7 @@ class Vettryx_WP_Architect_Admin {
                             <input type="text" class="vtx-input e-cpt-singular" value="${e.cpt_name_singular || ''}" required>
                         </div>
                         <div>
-                            <label>Dashicon <small>(Ex: dashicons-portfolio)</small></label>
+                            <label>Dashicon <a href="https://developer.wordpress.org/resource/dashicons/" target="_blank" title="Abrir biblioteca oficial do WordPress" style="text-decoration:none; font-size:12px;">(Ver Lista ↗)</a></label>
                             <input type="text" class="vtx-input e-icon" value="${e.icon || 'dashicons-admin-post'}">
                         </div>
                     </div>
