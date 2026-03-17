@@ -52,7 +52,14 @@ class Vettryx_WP_Architect_Admin {
      * Adiciona a página de administração ao menu do WordPress
      */
     public function add_admin_menu() {
-        add_menu_page('VETTRYX Architect', 'Architect', 'manage_options', 'vtx-architect', [$this, 'render_admin_page'], 'dashicons-layout', 80);
+        add_submenu_page(
+            'vettryx-tech',
+            'VETTRYX Architect',
+            'Architect',
+            'manage_options',
+            'vtx-architect',
+            [$this, 'render_admin_page']
+        );
     }
 
     /**
