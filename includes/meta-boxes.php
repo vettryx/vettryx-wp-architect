@@ -1,3 +1,4 @@
+<?php
 /**
  * Vettryx WP Architect Meta Boxes
  * 
@@ -6,8 +7,6 @@
  * @package Vettryx_WP_Architect
  * @since 1.0.0
  */
-
-<?php
 
 // Segurança: Impede acesso direto ao arquivo
 if (!defined('ABSPATH')) {

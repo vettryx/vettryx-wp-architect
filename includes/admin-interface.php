@@ -9,6 +9,7 @@
  * @since 1.0.0
  */
 
+// Segurança: Impede acesso direto ao arquivo
 if (!defined('ABSPATH')) {
     exit;
 }
