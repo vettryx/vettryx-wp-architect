@@ -1,8 +1,22 @@
+/**
+ * Vettryx WP Architect Dynamic Engine
+ * 
+ * Gerencia o registro dinâmico de CPTs e Taxonomias com base nas configurações do usuário.
+ * 
+ * @package Vettryx_WP_Architect
+ * @since 1.0.0
+ */
+
 <?php
+
+// Segurança: Impede acesso direto ao arquivo
 if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Classe principal do motor de entidades dinâmicas
+ */
 class Vettryx_WP_Architect_Engine {
 
     public function __construct() {
@@ -14,6 +28,12 @@ class Vettryx_WP_Architect_Engine {
         add_filter('get_the_archive_description', [$this, 'filter_archive_description']);
     }
 
+    /**
+     * Filtra o título da página de arquivo
+     * 
+     * @param string $title Título original da página de arquivo
+     * @return string Título customizado
+     */
     public function filter_archive_title($title) {
         if (is_post_type_archive()) {
             $post_type = get_query_var('post_type');
@@ -31,6 +51,12 @@ class Vettryx_WP_Architect_Engine {
         return $title;
     }
 
+    /**
+     * Filtra a descrição da página de arquivo
+     * 
+     * @param string $description Descrição original da página de arquivo
+     * @return string Descrição customizada
+     */
     public function filter_archive_description($description) {
         if (is_post_type_archive()) {
             $post_type = get_query_var('post_type');
@@ -46,6 +72,11 @@ class Vettryx_WP_Architect_Engine {
         return $description;
     }
 
+    /**
+     * Registra as entidades dinâmicas (CPTs e Taxonomias)
+     * 
+     * Executado no hook 'init' para registrar todos os tipos de conteúdo dinâmicos
+     */
     public function register_dynamic_entities() {
         $saved_json = get_option('vtx_dynamic_entities', '[]');
         $entities = json_decode($saved_json, true);

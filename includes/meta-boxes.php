@@ -1,10 +1,27 @@
+/**
+ * Vettryx WP Architect Meta Boxes
+ * 
+ * Gerencia os meta boxes dinâmicos para CPTs e Taxonomias
+ * 
+ * @package Vettryx_WP_Architect
+ * @since 1.0.0
+ */
+
 <?php
+
+// Segurança: Impede acesso direto ao arquivo
 if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Classe principal dos meta boxes dinâmicos
+ */
 class Vettryx_WP_Architect_Meta_Boxes {
 
+    /**
+     * Construtor da classe
+     */
     public function __construct() {
         add_action('add_meta_boxes', [$this, 'add_dynamic_meta_boxes']);
         add_action('save_post', [$this, 'save_dynamic_meta_boxes']);
@@ -15,6 +32,11 @@ class Vettryx_WP_Architect_Meta_Boxes {
         $this->hook_taxonomy_image_fields();
     }
 
+    /**
+     * Injeta os campos de imagem nas taxonomias geradas
+     * 
+     * @return void
+     */
     public function hook_taxonomy_image_fields() {
         $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
         if (!is_array($entities)) return;
@@ -30,10 +52,11 @@ class Vettryx_WP_Architect_Meta_Boxes {
         }
     }
 
-    // ==========================================
-    // META BOXES DAS TAXONOMIAS (CATEGORIAS)
-    // ==========================================
-    
+    /**
+     * Adiciona o campo de imagem no formulário de criação de categoria
+     * 
+     * @return void
+     */
     public function add_category_image_field() {
         ?>
         <div class="form-field term-group">
@@ -46,6 +69,12 @@ class Vettryx_WP_Architect_Meta_Boxes {
         <?php
     }
 
+    /**
+     * Adiciona o campo de imagem no formulário de edição de categoria
+     * 
+     * @param WP_Term $term Termo da taxonomia
+     * @return void
+     */
     public function edit_category_image_field($term) {
         $image_id = get_term_meta($term->term_id, 'vtx_tax_image', true);
         $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : '';
@@ -67,19 +96,30 @@ class Vettryx_WP_Architect_Meta_Boxes {
         <?php
     }
 
+    /**
+     * Salva a imagem da categoria
+     * 
+     * @param int $term_id ID do termo da taxonomia
+     * @return void
+     */
     public function save_category_image($term_id) {
         if (isset($_POST['vtx_tax_image'])) {
             update_term_meta($term_id, 'vtx_tax_image', sanitize_text_field($_POST['vtx_tax_image']));
         }
     }
 
-
-    // ==========================================
-    // META BOXES DOS POSTS (CPTs)
-    // ==========================================
-
+    /**
+     * Enfileira o media uploader do WordPress
+     * 
+     * @return void
+     */
     public function enqueue_media_uploader() { wp_enqueue_media(); }
 
+    /**
+     * Adiciona os meta boxes dinâmicos para os CPTs
+     * 
+     * @return void
+     */
     public function add_dynamic_meta_boxes() {
         $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
         if (!is_array($entities)) return;
@@ -89,6 +129,13 @@ class Vettryx_WP_Architect_Meta_Boxes {
         }
     }
 
+    /**
+     * Renderiza o conteúdo do meta box
+     * 
+     * @param WP_Post $post Post atual
+     * @param array $metabox Metadados do meta box
+     * @return void
+     */
     public function render_meta_box_content($post, $metabox) {
         wp_nonce_field('vtx_architect_save_data', 'vtx_architect_nonce');
         $fields = $metabox['args']['fields'];
@@ -126,6 +173,12 @@ class Vettryx_WP_Architect_Meta_Boxes {
         echo '</div><style>.vtx-btn-danger { color: #d63638; text-decoration: none; font-weight: bold; }</style>';
     }
 
+    /**
+     * Salva os meta boxes dinâmicos
+     * 
+     * @param int $post_id ID do post
+     * @return void
+     */
     public function save_dynamic_meta_boxes($post_id) {
         if (!isset($_POST['vtx_architect_nonce']) || !wp_verify_nonce($_POST['vtx_architect_nonce'], 'vtx_architect_save_data') || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || !current_user_can('edit_post', $post_id)) return;
         $post_type = get_post_type($post_id);
@@ -141,6 +194,11 @@ class Vettryx_WP_Architect_Meta_Boxes {
         }
     }
 
+    /**
+     * Renderiza o JavaScript para o media uploader
+     * 
+     * @return void
+     */
     public function render_media_uploader_js() {
         $screen = get_current_screen();
         // Permite o JS rodar tanto nos posts quanto na tela de edição de taxonomias
