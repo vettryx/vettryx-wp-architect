@@ -18,6 +18,7 @@ if (!defined('ABSPATH')) {
 require_once plugin_dir_path(__FILE__) . 'includes/admin-interface.php';
 require_once plugin_dir_path(__FILE__) . 'includes/dynamic-engine.php';
 require_once plugin_dir_path(__FILE__) . 'includes/meta-boxes.php';
+require_once plugin_dir_path(__FILE__) . 'includes/shortcodes.php';
 
 /**
  * Classe principal de inicialização
@@ -26,7 +27,8 @@ class Vettryx_WP_Architect {
     public function __construct() {
         new Vettryx_WP_Architect_Admin();
         new Vettryx_WP_Architect_Engine();
-        new Vettryx_WP_Architect_MetaBoxes();
+        new Vettryx_WP_Architect_Meta_Boxes();
+        new Vettryx_WP_Architect_Shortcodes();
     }
 }
 
