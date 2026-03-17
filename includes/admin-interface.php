@@ -58,21 +58,15 @@ class Vettryx_WP_Architect_Admin {
             $slug = $pt->name;
             $taxonomies = get_object_taxonomies($slug, 'objects');
             $cat_slug = ''; $cat_name = ''; $tag_slug = ''; $tag_name = '';
-            
             foreach ($taxonomies as $tax) {
-                if ($tax->hierarchical && empty($cat_slug)) {
-                    $cat_slug = $tax->name; $cat_name = $tax->labels->name;
-                } elseif (!$tax->hierarchical && empty($tag_slug)) {
-                    $tag_slug = $tax->name; $tag_name = $tax->labels->name;
-                }
+                if ($tax->hierarchical && empty($cat_slug)) { $cat_slug = $tax->name; $cat_name = $tax->labels->name; }
+                elseif (!$tax->hierarchical && empty($tag_slug)) { $tag_slug = $tax->name; $tag_name = $tax->labels->name; }
             }
 
             $meta_keys = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT pm.meta_key FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key NOT LIKE '\_%' LIMIT 50", $slug));
             $fields = [];
             if ($meta_keys) {
-                foreach ($meta_keys as $key) {
-                    $fields[] = ['old_id' => $key, 'id' => $key, 'label' => ucwords(str_replace(['_', '-'], ' ', $key)), 'type' => 'text'];
-                }
+                foreach ($meta_keys as $key) { $fields[] = ['old_id' => $key, 'id' => $key, 'label' => ucwords(str_replace(['_', '-'], ' ', $key)), 'type' => 'text']; }
             }
 
             $available_imports[$slug] = [
@@ -109,6 +103,17 @@ class Vettryx_WP_Architect_Admin {
             </form>
         </div>
 
+        <div id="vtx-icon-picker-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; align-items:center; justify-content:center;">
+           <div style="background:#fff; width:600px; max-width:90%; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.2); display:flex; flex-direction:column; max-height:80vh;">
+               <div style="padding:15px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                   <h3 style="margin:0;">Selecione o Ícone para o Menu</h3>
+                   <button type="button" id="btn-close-icon-picker" style="background:none; border:none; font-size:24px; cursor:pointer; color:#666;">&times;</button>
+               </div>
+               <div id="vtx-icon-grid" style="padding:20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(45px, 1fr)); gap:15px; overflow-y:auto;">
+                  </div>
+           </div>
+        </div>
+
         <style>
             .vtx-entity-card { background: #fff; border: 1px solid #ccd0d4; padding: 20px; border-left: 4px solid #023047; margin-bottom: 20px; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
             .vtx-entity-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
@@ -123,6 +128,8 @@ class Vettryx_WP_Architect_Admin {
             .vtx-input { width: 100%; }
             .vtx-sc-hint-input { margin-top:5px; width:100%; background:transparent; border:none; color:#d63638; font-family:monospace; font-weight:bold; cursor:pointer; padding:0; box-shadow:none !important; }
             .vtx-sc-hint-input:focus { outline:none; }
+            .vtx-icon-item { font-size: 24px; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; color: #555; transition: all 0.2s; }
+            .vtx-icon-item:hover { background: #0073aa; color: #fff; border-color: #0073aa; transform: scale(1.1); }
         </style>
 
         <script>
@@ -134,6 +141,38 @@ class Vettryx_WP_Architect_Admin {
             const hiddenInput = document.getElementById('vtx_dynamic_entities');
             const form = document.getElementById('vtx-architect-form');
             const availableImports = <?php echo json_encode($available_imports); ?>;
+
+            // Modal Icon Picker Logic
+            const iconModal = document.getElementById('vtx-icon-picker-modal');
+            const iconGrid = document.getElementById('vtx-icon-grid');
+            let currentIconTarget = null; // Armazena qual card abriu o modal
+
+            const dashiconsList = [
+                'dashicons-admin-post', 'dashicons-portfolio', 'dashicons-store', 'dashicons-welcome-learn-more', 
+                'dashicons-building', 'dashicons-businessman', 'dashicons-hammer', 'dashicons-art', 
+                'dashicons-camera', 'dashicons-video-alt3', 'dashicons-format-gallery', 'dashicons-desktop', 
+                'dashicons-smartphone', 'dashicons-megaphone', 'dashicons-calendar-alt', 'dashicons-chart-bar', 
+                'dashicons-groups', 'dashicons-awards', 'dashicons-location', 'dashicons-cart', 'dashicons-heart', 
+                'dashicons-star-filled', 'dashicons-lightbulb', 'dashicons-money-alt', 'dashicons-shield', 
+                'dashicons-database', 'dashicons-cloud', 'dashicons-airplane', 'dashicons-clipboard', 'dashicons-testimonial'
+            ];
+
+            // Preenche o modal de ícones
+            iconGrid.innerHTML = dashiconsList.map(icon => `<div class="vtx-icon-item" data-icon="${icon}"><span class="dashicons ${icon}"></span></div>`).join('');
+
+            // Fecha o Modal
+            document.getElementById('btn-close-icon-picker').addEventListener('click', () => iconModal.style.display = 'none');
+            
+            // Seleciona o ícone
+            iconGrid.addEventListener('click', function(e) {
+                const item = e.target.closest('.vtx-icon-item');
+                if (item && currentIconTarget) {
+                    const selectedIcon = item.getAttribute('data-icon');
+                    currentIconTarget.querySelector('.e-icon').value = selectedIcon;
+                    currentIconTarget.querySelector('.vtx-icon-preview').className = `vtx-icon-preview dashicons ${selectedIcon}`;
+                    iconModal.style.display = 'none';
+                }
+            });
 
             let entities = [];
             try { entities = JSON.parse(hiddenInput.value || '[]'); } catch (e) { entities = []; }
@@ -175,7 +214,14 @@ class Vettryx_WP_Architect_Admin {
                         <div><label>Slug do CPT</label><input type="hidden" class="e-old-cpt-slug" value="${e.cpt_slug || ''}"><input type="text" class="vtx-input e-cpt-slug" value="${e.cpt_slug || ''}" required></div>
                         <div><label>Nome Plural</label><input type="text" class="vtx-input e-cpt-plural" value="${e.cpt_name_plural || ''}" required></div>
                         <div><label>Nome Singular</label><input type="text" class="vtx-input e-cpt-singular" value="${e.cpt_name_singular || ''}" required></div>
-                        <div><label>Dashicon <a href="https://developer.wordpress.org/resource/dashicons/" target="_blank" style="text-decoration:none; font-size:12px;">(Ver Lista ↗)</a></label><input type="text" class="vtx-input e-icon" value="${e.icon || 'dashicons-admin-post'}"></div>
+                        <div>
+                            <label>Ícone do Menu</label>
+                            <div style="display:flex; gap:10px; align-items:center; margin-top:2px;">
+                                <span class="vtx-icon-preview dashicons ${e.icon || 'dashicons-admin-post'}" style="font-size:24px; width:24px; height:24px; color:#555;"></span>
+                                <input type="text" class="vtx-input e-icon" value="${e.icon || 'dashicons-admin-post'}" readonly style="background:#f0f0f1; width:calc(100% - 100px);">
+                                <button type="button" class="button btn-open-icon-picker">Escolher</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="vtx-section-title">Página de Arquivo (Global)</div>
@@ -230,6 +276,12 @@ class Vettryx_WP_Architect_Admin {
             });
 
             container.addEventListener('click', function(e) {
+                // Abre o picker de ícones
+                if (e.target.classList.contains('btn-open-icon-picker')) {
+                    e.preventDefault();
+                    currentIconTarget = e.target.closest('.vtx-grid-4');
+                    iconModal.style.display = 'flex';
+                }
                 if (e.target.classList.contains('btn-remove-entity')) {
                     e.preventDefault();
                     if(confirm('Remover entidade?')) { entities.splice(e.target.closest('.vtx-entity-card').dataset.index, 1); render(); }
