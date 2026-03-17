@@ -247,6 +247,7 @@ class Vettryx_WP_Architect_Admin {
                             <option value="text" ${f.type === 'text' ? 'selected' : ''}>Texto Curto</option>
                             <option value="textarea" ${f.type === 'textarea' ? 'selected' : ''}>Texto Longo</option>
                             <option value="url" ${f.type === 'url' ? 'selected' : ''}>URL</option>
+                            <option value="date" ${f.type === 'date' ? 'selected' : ''}>Data (Dia/Mês/Ano)</option>
                             <option value="image" ${f.type === 'image' ? 'selected' : ''}>Imagem Única</option>
                             <option value="gallery" ${f.type === 'gallery' ? 'selected' : ''}>Galeria de Fotos</option>
                         </select>

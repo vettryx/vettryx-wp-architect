@@ -43,18 +43,32 @@ class Vettryx_WP_Architect_Shortcodes {
                 foreach ($e['fields'] as $field) {
                     $field_id = sanitize_text_field($field['id']);
                     $field_type = sanitize_text_field($field['type']);
+                    
                     add_shortcode("vtx_{$cpt_slug}_{$field_id}", function($atts) use ($field_id, $field_type) {
                         $a = shortcode_atts(['id' => ''], $atts);
                         $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
                         if (!$post_id) return '';
+                        
                         $value = get_post_meta($post_id, $field_id, true);
-                        if (empty($value)) return '';
+
+                        // Fallback de retrocompatibilidade para o Fast Gallery
+                        if ($field_type === 'date' && !is_array($value)) {
+                            $value = [
+                                'day' => get_post_meta($post_id, $field_id . '_day', true),
+                                'month' => get_post_meta($post_id, $field_id . '_month', true),
+                                'year' => get_post_meta($post_id, $field_id . '_year', true)
+                            ];
+                        }
+
+                        if (empty($value) && $field_type !== 'date') return '';
+                        if ($field_type === 'date' && empty($value['year'])) return '';
+
                         return Vettryx_WP_Architect_Shortcodes::format_output($value, $field_type);
                     });
                 }
             }
 
-            // 2. Taxonomias
+            // 2. Taxonomias e 3. Página de Arquivo continuam inalterados...
             if (!empty($e['cat_slug'])) {
                 $cat_tax = $cpt_slug . '_category';
                 add_shortcode("vtx_{$cpt_slug}_categorias", function($atts) use ($cat_tax) {
@@ -62,7 +76,6 @@ class Vettryx_WP_Architect_Shortcodes {
                     return Vettryx_WP_Architect_Shortcodes::format_taxonomy(!empty($a['id']) ? intval($a['id']) : get_the_ID(), $cat_tax, 'category');
                 });
                 
-                // Shortcode para a Capa da Categoria (Ex: [vtx_projetos_categoria_capa])
                 add_shortcode("vtx_{$cpt_slug}_categoria_capa", function($atts) use ($cat_tax) {
                     $a = shortcode_atts(['id' => ''], $atts);
                     $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
@@ -70,7 +83,7 @@ class Vettryx_WP_Architect_Shortcodes {
                     
                     $terms = get_the_terms($post_id, $cat_tax);
                     if ($terms && !is_wp_error($terms)) {
-                        $term = $terms[0]; // Pega a primeira categoria atrelada ao post
+                        $term = $terms[0]; 
                         $image_id = get_term_meta($term->term_id, 'vtx_tax_image', true);
                         if ($image_id) {
                             $img_url = wp_get_attachment_image_url($image_id, 'large');
@@ -81,7 +94,6 @@ class Vettryx_WP_Architect_Shortcodes {
                 });
             }
 
-            // 3. Tags
             if (!empty($e['tag_slug'])) {
                 $tag_tax = $cpt_slug . '_tag';
                 add_shortcode("vtx_{$cpt_slug}_tags", function($atts) use ($tag_tax) {
@@ -90,7 +102,6 @@ class Vettryx_WP_Architect_Shortcodes {
                 });
             }
 
-            // Página de Arquivo (Global)
             add_shortcode("vtx_{$cpt_slug}_arquivo_titulo", function() use ($e, $cpt_slug) {
                 if (is_tax($cpt_slug . '_category') || is_tax($cpt_slug . '_tag')) {
                     $term = get_queried_object();
@@ -99,7 +110,6 @@ class Vettryx_WP_Architect_Shortcodes {
                 return !empty($e['archive_title']) ? esc_html($e['archive_title']) : esc_html($e['cpt_name_plural']);
             });
 
-            // Página de Arquivo (Global) - Descrição
             add_shortcode("vtx_{$cpt_slug}_arquivo_descricao", function() use ($e, $cpt_slug) {
                 if (is_tax($cpt_slug . '_category') || is_tax($cpt_slug . '_tag')) {
                     $term = get_queried_object();
@@ -122,6 +132,20 @@ class Vettryx_WP_Architect_Shortcodes {
             case 'url': return '<a href="' . esc_url($value) . '" class="vtx-sc-url" target="_blank" rel="noopener">' . esc_url($value) . '</a>';
             case 'textarea': return wpautop(esc_html($value));
             case 'image': $img_url = wp_get_attachment_image_url($value, 'large'); return $img_url ? '<img src="' . esc_url($img_url) . '" class="vtx-sc-image" style="max-width:100%; height:auto; border-radius:8px; display:block;">' : '';
+            
+            // FORMATADOR DE DATA FLEXÍVEL
+            case 'date':
+                if (!is_array($value)) return esc_html($value);
+                $day = $value['day'] ?? ''; $month = $value['month'] ?? ''; $year = $value['year'] ?? '';
+                if (!$year) return '';
+
+                $meses = ['01' => 'Janeiro', '02' => 'Fevereiro', '03' => 'Março', '04' => 'Abril', '05' => 'Maio', '06' => 'Junho', '07' => 'Julho', '08' => 'Agosto', '09' => 'Setembro', '10' => 'Outubro', '11' => 'Novembro', '12' => 'Dezembro'];
+                $month_text = ($month && isset($meses[$month])) ? $meses[$month] : '';
+
+                if ($day && $month_text) return "$day de $month_text de $year";
+                elseif ($month_text) return "$month_text de $year";
+                else return $year;
+
             case 'gallery':
                 $ids = explode(',', $value);
                 $html = '<div class="vtx-sc-gallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:15px;">';
