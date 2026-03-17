@@ -9,6 +9,20 @@ class Vettryx_WP_Architect_Admin {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('update_option_vtx_dynamic_entities', [$this, 'migrate_database_entities'], 10, 2);
+        
+        // NOVO: Enfileira scripts e estilos customizados apenas na página do plugin
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
+    }
+
+    public function enqueue_admin_assets($hook) {
+        // Carrega o JS apenas se estivermos na página do VETTRYX Architect
+        if ($hook !== 'toplevel_page_vtx-architect') {
+            return;
+        }
+        
+        // Caminho dinâmico para a pasta assets na raiz do plugin
+        $plugin_url = plugin_dir_url(dirname(__FILE__));
+        wp_enqueue_script('vtx-dashicons-list', $plugin_url . 'assets/js/vtx-dashicons.js', [], '1.0.0', true);
     }
 
     public function add_admin_menu() {
@@ -145,20 +159,13 @@ class Vettryx_WP_Architect_Admin {
             // Modal Icon Picker Logic
             const iconModal = document.getElementById('vtx-icon-picker-modal');
             const iconGrid = document.getElementById('vtx-icon-grid');
-            let currentIconTarget = null; // Armazena qual card abriu o modal
+            let currentIconTarget = null; 
 
-            const dashiconsList = [
-                'dashicons-admin-post', 'dashicons-portfolio', 'dashicons-store', 'dashicons-welcome-learn-more', 
-                'dashicons-building', 'dashicons-businessman', 'dashicons-hammer', 'dashicons-art', 
-                'dashicons-camera', 'dashicons-video-alt3', 'dashicons-format-gallery', 'dashicons-desktop', 
-                'dashicons-smartphone', 'dashicons-megaphone', 'dashicons-calendar-alt', 'dashicons-chart-bar', 
-                'dashicons-groups', 'dashicons-awards', 'dashicons-location', 'dashicons-cart', 'dashicons-heart', 
-                'dashicons-star-filled', 'dashicons-lightbulb', 'dashicons-money-alt', 'dashicons-shield', 
-                'dashicons-database', 'dashicons-cloud', 'dashicons-airplane', 'dashicons-clipboard', 'dashicons-testimonial'
-            ];
+            // NOVO: Puxa do arquivo externo js enfileirado
+            const dashiconsList = window.vtxDashiconsList || ['dashicons-admin-post'];
 
-            // Preenche o modal de ícones
-            iconGrid.innerHTML = dashiconsList.map(icon => `<div class="vtx-icon-item" data-icon="${icon}"><span class="dashicons ${icon}"></span></div>`).join('');
+            // Preenche o modal de ícones dinamicamente
+            iconGrid.innerHTML = dashiconsList.map(icon => `<div class="vtx-icon-item" data-icon="${icon}" title="${icon}"><span class="dashicons ${icon}"></span></div>`).join('');
 
             // Fecha o Modal
             document.getElementById('btn-close-icon-picker').addEventListener('click', () => iconModal.style.display = 'none');
