@@ -8,39 +8,62 @@
  * @since 1.0.0
  */
 
-// Segurança: Impede acesso direto ao arquivo
+// Segurança: Evita acesso direto ao arquivo
 if (!defined('ABSPATH')) {
     exit;
 }
 
-/**
- * Classe principal dos meta boxes
- */
+// Classe responsável por gerenciar os meta boxes dinâmicos
 class Vettryx_WP_Architect_Meta_Boxes {
 
-    /**
-     * Construtor da classe
-     * Adiciona os hooks necessários para os meta boxes
-     * 
-     * @return void
-     */
+    // Construtor: Adiciona os hooks
     public function __construct() {
         add_action('add_meta_boxes', [$this, 'add_dynamic_meta_boxes']);
         add_action('save_post', [$this, 'save_dynamic_meta_boxes']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_media_uploader']);
         add_action('admin_footer', [$this, 'render_media_uploader_js']);
+        add_filter('wp_insert_post_data', [$this, 'force_dynamic_date_slug'], 10, 2);
         $this->hook_taxonomy_image_fields();
     }
 
-    /**
-     * Hook para adicionar campos de imagem em taxonomias
-     * 
-     * @return void
-     */
+    // Método para forçar o slug dinâmico
+    public function force_dynamic_date_slug($data, $postarr) {
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return $data;
+        if (in_array($data['post_status'], ['auto-draft', 'trash'])) return $data;
+
+        $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
+        if (!is_array($entities)) return $data;
+
+        foreach ($entities as $e) {
+            if ($e['cpt_slug'] === $data['post_type'] && !empty($e['fields'])) {
+                foreach ($e['fields'] as $field) {
+                    if ($field['type'] === 'date' && !empty($field['use_as_slug'])) {
+                        $id = $field['id'];
+                        $year = isset($_POST[$id.'_year']) ? sanitize_text_field($_POST[$id.'_year']) : get_post_meta($postarr['ID'], $id.'_year', true);
+                        $month = isset($_POST[$id.'_month']) ? sanitize_text_field($_POST[$id.'_month']) : get_post_meta($postarr['ID'], $id.'_month', true);
+                        $day = isset($_POST[$id.'_day']) ? sanitize_text_field($_POST[$id.'_day']) : get_post_meta($postarr['ID'], $id.'_day', true);
+
+                        if (empty($year)) continue;
+
+                        $date_prefix = $year . str_pad($month ?: '01', 2, '0', STR_PAD_LEFT) . str_pad($day ?: '01', 2, '0', STR_PAD_LEFT);
+                        $clean_slug = preg_replace('/^[0-9]{8}-/', '', $data['post_name'] ?: sanitize_title($data['post_title']));
+                        $desired_slug = $date_prefix . '-' . $clean_slug;
+
+                        if ($data['post_name'] !== $desired_slug) {
+                            $data['post_name'] = wp_unique_post_slug($desired_slug, $postarr['ID'], $data['post_status'], $data['post_type'], $data['post_parent']);
+                        }
+                        break 2;
+                    }
+                }
+            }
+        }
+        return $data;
+    }
+
+    // Método para adicionar os campos de imagem nas categorias
     public function hook_taxonomy_image_fields() {
         $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
         if (!is_array($entities)) return;
-
         foreach ($entities as $e) {
             if (!empty($e['cpt_slug']) && !empty($e['cat_slug'])) {
                 $tax_slug = sanitize_title($e['cpt_slug']) . '_category';
@@ -52,29 +75,19 @@ class Vettryx_WP_Architect_Meta_Boxes {
         }
     }
 
-    /**
-     * Adiciona o campo de imagem no formulário de criação de categoria
-     * 
-     * @return void
-     */
+    // Método para adicionar o campo de imagem no formulário de criação de categoria
     public function add_category_image_field() {
         ?>
         <div class="form-field term-group">
-            <label for="vtx_tax_image">Imagem Representativa da Categoria</label>
+            <label for="vtx_tax_image">Imagem Representativa</label>
             <input type="hidden" id="vtx_tax_image" name="vtx_tax_image" value="">
             <div id="preview_vtx_tax_image" style="margin-top:10px;"></div>
             <p><button type="button" class="button vtx-upload-single-img" data-target="vtx_tax_image">Selecionar Imagem</button></p>
-            <p class="description">Imagem usada para os grids de categoria (Ex: Torres da Antebellum).</p>
         </div>
         <?php
     }
 
-    /**
-     * Edita o campo de imagem no formulário de edição de categoria
-     * 
-     * @param object $term Objeto da categoria
-     * @return void
-     */
+    // Método para editar o campo de imagem no formulário de edição de categoria
     public function edit_category_image_field($term) {
         $image_id = get_term_meta($term->term_id, 'vtx_tax_image', true);
         $image_url = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : '';
@@ -89,35 +102,20 @@ class Vettryx_WP_Architect_Meta_Boxes {
                         <a href="#" class="vtx-remove-single-img" data-target="vtx_tax_image" style="color:#d63638; text-decoration:none; font-weight:bold;">Remover Imagem</a>
                     <?php endif; ?>
                 </div>
-                <p><button type="button" class="button vtx-upload-single-img" data-target="vtx_tax_image" style="margin-top:10px;">Selecionar / Alterar Imagem</button></p>
-                <p class="description">Imagem usada para os grids de categoria.</p>
+                <p><button type="button" class="button vtx-upload-single-img" data-target="vtx_tax_image" style="margin-top:10px;">Alterar Imagem</button></p>
             </td>
         </tr>
         <?php
     }
 
-    /**
-     * Salva o campo de imagem da categoria
-     * 
-     * @param int $term_id ID da categoria
-     * @return void
-     */
+    // Método para salvar o campo de imagem da categoria
     public function save_category_image($term_id) {
         if (isset($_POST['vtx_tax_image'])) update_term_meta($term_id, 'vtx_tax_image', sanitize_text_field($_POST['vtx_tax_image']));
     }
 
-    /**
-     * Enfileira o media uploader do WordPress
-     * 
-     * @return void
-     */
+    // Método para enfileirar o media uploader
     public function enqueue_media_uploader() { wp_enqueue_media(); }
 
-    /**
-     * Adiciona os meta boxes dinâmicos
-     * 
-     * @return void
-     */
     public function add_dynamic_meta_boxes() {
         $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
         if (!is_array($entities)) return;
@@ -127,13 +125,7 @@ class Vettryx_WP_Architect_Meta_Boxes {
         }
     }
 
-    /**
-     * Renderiza o conteúdo do meta box
-     * 
-     * @param object $post Objeto do post
-     * @param array $metabox Array de meta box
-     * @return void
-     */
+    // Método para renderizar o conteúdo do meta box
     public function render_meta_box_content($post, $metabox) {
         wp_nonce_field('vtx_architect_save_data', 'vtx_architect_nonce');
         $fields = $metabox['args']['fields'];
@@ -153,28 +145,19 @@ class Vettryx_WP_Architect_Meta_Boxes {
                 case 'textarea':
                     echo "<textarea id='{$id}' name='{$id}' rows='4' style='width: 100%;'>" . esc_textarea($value) . "</textarea>"; break;
                 
-                // NOVO CAMPO: DATA FLEXÍVEL
                 case 'date':
-                    // Busca retrocompatibilidade (se o array principal não existir, tenta ler as keys do Fast Gallery)
-                    $val = is_array($value) ? $value : [
-                        'day' => get_post_meta($post->ID, $id . '_day', true),
-                        'month' => get_post_meta($post->ID, $id . '_month', true),
-                        'year' => get_post_meta($post->ID, $id . '_year', true)
-                    ];
+                    $val = is_array($value) ? $value : ['day' => get_post_meta($post->ID, $id . '_day', true), 'month' => get_post_meta($post->ID, $id . '_month', true), 'year' => get_post_meta($post->ID, $id . '_year', true)];
                     $d = $val['day'] ?? ''; $m = $val['month'] ?? ''; $y = $val['year'] ?? '';
                     $current_year = date('Y');
 
                     echo "<div style='display:flex; gap:10px; margin-top:5px;'>";
-                    // Dia
                     echo "<select name='{$id}_day' style='width:auto;'><option value=''>Dia (Opcional)</option>";
                     for($i=1; $i<=31; $i++) { $val_d = str_pad($i, 2, '0', STR_PAD_LEFT); echo "<option value='{$val_d}' ".selected($d, $val_d, false).">{$val_d}</option>"; }
                     echo "</select>";
-                    // Mês
                     echo "<select name='{$id}_month' style='width:auto;'><option value=''>Mês (Opcional)</option>";
                     $meses = [1=>'Jan',2=>'Fev',3=>'Mar',4=>'Abr',5=>'Mai',6=>'Jun',7=>'Jul',8=>'Ago',9=>'Set',10=>'Out',11=>'Nov',12=>'Dez'];
                     foreach($meses as $num => $nome) { $val_m = str_pad($num, 2, '0', STR_PAD_LEFT); echo "<option value='{$val_m}' ".selected($m, $val_m, false).">{$nome}</option>"; }
                     echo "</select>";
-                    // Ano
                     echo "<select name='{$id}_year' style='width:auto;' required><option value=''>Ano (Obrigatório)</option>";
                     for($i = $current_year + 2; $i >= $current_year - 15; $i--) { echo "<option value='{$i}' ".selected($y, $i, false).">{$i}</option>"; }
                     echo "</select></div>";
@@ -202,12 +185,7 @@ class Vettryx_WP_Architect_Meta_Boxes {
         echo '</div><style>.vtx-btn-danger { color: #d63638; text-decoration: none; font-weight: bold; }</style>';
     }
 
-    /**
-     * Salva os meta boxes dinâmicos
-     * 
-     * @param int $post_id ID do post
-     * @return void
-     */
+    // Método para salvar os meta boxes dinâmicos
     public function save_dynamic_meta_boxes($post_id) {
         if (!isset($_POST['vtx_architect_nonce']) || !wp_verify_nonce($_POST['vtx_architect_nonce'], 'vtx_architect_save_data') || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || !current_user_can('edit_post', $post_id)) return;
         $post_type = get_post_type($post_id);
@@ -217,26 +195,12 @@ class Vettryx_WP_Architect_Meta_Boxes {
             if ($e['cpt_slug'] === $post_type && !empty($e['fields'])) {
                 foreach ($e['fields'] as $field) {
                     $id = $field['id'];
-                    
-                    // Lógica de salvamento para Datas Flexíveis
                     if ($field['type'] === 'date') {
-                        $val = [
-                            'day' => isset($_POST[$id.'_day']) ? sanitize_text_field($_POST[$id.'_day']) : '',
-                            'month' => isset($_POST[$id.'_month']) ? sanitize_text_field($_POST[$id.'_month']) : '',
-                            'year' => isset($_POST[$id.'_year']) ? sanitize_text_field($_POST[$id.'_year']) : ''
-                        ];
-                        // Salva o array mestre
+                        $val = ['day' => isset($_POST[$id.'_day']) ? sanitize_text_field($_POST[$id.'_day']) : '', 'month' => isset($_POST[$id.'_month']) ? sanitize_text_field($_POST[$id.'_month']) : '', 'year' => isset($_POST[$id.'_year']) ? sanitize_text_field($_POST[$id.'_year']) : ''];
                         update_post_meta($post_id, $id, $val);
-                        // Salva as chaves separadas para manter 100% de compatibilidade com plugins legados
-                        update_post_meta($post_id, $id . '_day', $val['day']);
-                        update_post_meta($post_id, $id . '_month', $val['month']);
-                        update_post_meta($post_id, $id . '_year', $val['year']);
+                        update_post_meta($post_id, $id . '_day', $val['day']); update_post_meta($post_id, $id . '_month', $val['month']); update_post_meta($post_id, $id . '_year', $val['year']);
                     } else {
-                        if (isset($_POST[$id])) { 
-                            update_post_meta($post_id, $id, $field['type'] === 'textarea' ? sanitize_textarea_field($_POST[$id]) : ($field['type'] === 'url' ? esc_url_raw($_POST[$id]) : sanitize_text_field($_POST[$id]))); 
-                        } else { 
-                            delete_post_meta($post_id, $id); 
-                        }
+                        if (isset($_POST[$id])) { update_post_meta($post_id, $id, $field['type'] === 'textarea' ? sanitize_textarea_field($_POST[$id]) : ($field['type'] === 'url' ? esc_url_raw($_POST[$id]) : sanitize_text_field($_POST[$id]))); } else { delete_post_meta($post_id, $id); }
                     }
                 }
                 break;
@@ -244,11 +208,7 @@ class Vettryx_WP_Architect_Meta_Boxes {
         }
     }
 
-    /**
-     * Renderiza o JavaScript do media uploader
-     * 
-     * @return void
-     */
+    // Método para renderizar o JavaScript do media uploader
     public function render_media_uploader_js() {
         $screen = get_current_screen();
         if (!$screen || ($screen->base !== 'post' && $screen->base !== 'term')) return; 
