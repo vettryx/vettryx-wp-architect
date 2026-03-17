@@ -3,7 +3,7 @@
  * Plugin Name: VETTRYX WP Architect
  * Plugin URI:  https://github.com/vettryx/vettryx-wp-architect
  * Description: Motor dinâmico da VETTRYX para criação de Custom Post Types (CPTs), Taxonomias, Meta Boxes e Shortcodes sem plugins de terceiros.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      VETTRYX Tech
  * Author URI:  https://vettryx.com.br
  * License:     Proprietária (Uso Comercial Exclusivo)

@@ -1,163 +1,167 @@
 <?php
 /**
- * Vettryx WP Architect Admin Interface
+ * Arquivo: modules/architect/includes/admin-interface.php
  * 
- * Gerencia a página de administração do plugin, incluindo formulários dinâmicos
- * para criação de CPTs, Taxonomias e Campos Personalizados.
+ * Responsável pela interface administrativa do módulo Architect.
  * 
- * @package Vettryx_WP_Architect
+ * @package VETTRYX_WP_Core
+ * @subpackage Architect
+ * @author André Ventura
  * @since 1.0.0
  */
 
-// Segurança: Impede acesso direto ao arquivo
-if (!defined('ABSPATH')) {
+// Segurança: Impede o acesso direto ao arquivo
+if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-/**
- * Classe principal da interface de administração
- */
+// Evita conflitos de classe
 class Vettryx_WP_Architect_Admin {
 
-    /**
-     * Construtor da classe
-     * Adiciona os hooks necessários para a interface de administração
-     */
+    // Nome da opção no banco de dados
+    private $option_name = 'vtx_dynamic_entities';
+
+    // Construtor: Define hooks para admin e front-end
     public function __construct() {
-        add_action('admin_menu', [$this, 'add_admin_menu']);
-        add_action('admin_init', [$this, 'register_settings']);
-        add_action('update_option_vtx_dynamic_entities', [$this, 'migrate_database_entities'], 10, 2);
-        
-        // NOVO: Enfileira scripts e estilos customizados apenas na página do plugin
-        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
-    }
-
-    /**
-     * Enfileira scripts e estilos customizados para a página do plugin
-     * 
-     * @param string $hook Hook da página atual
-     */
-    public function enqueue_admin_assets($hook) {
-        // Carrega o JS apenas se estivermos na página do VETTRYX Architect
-        if ($hook !== 'toplevel_page_vtx-architect') {
-            return;
+        if ( is_admin() ) {
+            add_action( 'admin_menu', [ $this, 'add_submenu_page' ] );
+            add_action( 'admin_init', [ $this, 'register_settings' ] );
+            add_action( 'update_option_' . $this->option_name, [ $this, 'migrate_database_entities' ], 10, 2 );
+            add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
         }
-        
-        // Caminho dinâmico para a pasta assets na raiz do plugin
-        $plugin_url = plugin_dir_url(dirname(__FILE__));
-        wp_enqueue_script('vtx-dashicons-list', $plugin_url . 'assets/js/vtx-dashicons.js', [], '1.0.0', true);
     }
 
-    /**
-     * Adiciona a página de administração ao menu do WordPress
-     */
-    public function add_admin_menu() {
+    // Adiciona a página de configurações no menu do VETTRYX Core
+    public function add_submenu_page() {
         add_submenu_page(
-            'vettryx-tech',
-            'VETTRYX Architect',
+            'vettryx-core-modules',
+            'Architect',
             'Architect',
             'manage_options',
             'vtx-architect',
-            [$this, 'render_admin_page']
+            [ $this, 'render_admin_page' ]
         );
     }
 
-    /**
-     * Registra as configurações do plugin
-     */
+    // Registra as configurações
     public function register_settings() {
-        register_setting('vtx_architect_settings_group', 'vtx_dynamic_entities');
+        register_setting( 'vtx_architect_settings_group', $this->option_name );
     }
 
-    /**
-     * Migra entidades do banco de dados
-     * 
-     * @param string $old_value Valor antigo da opção
-     * @param string $new_value Valor novo da opção
-     */
-    public function migrate_database_entities($old_value, $new_value) {
+    // Enfileira os scripts do admin
+    public function enqueue_admin_assets( $hook ) {
+        // Carrega apenas na página do Architect
+        if ( strpos( $hook, 'vtx-architect' ) === false ) {
+            return;
+        }
+        
+        $plugin_url = plugin_dir_url( dirname( __FILE__ ) );
+        wp_enqueue_script( 'vtx-dashicons-list', $plugin_url . 'assets/js/vtx-dashicons.js', [], '1.0.0', true );
+    }
+
+    // Migração de dados ao salvar a opção
+    public function migrate_database_entities( $old_value, $new_value ) {
         global $wpdb;
-        $entities = json_decode($new_value, true);
-        if (!is_array($entities)) return;
+        $entities = json_decode( $new_value, true );
+        
+        if ( ! is_array( $entities ) ) {
+            return;
+        }
 
-        foreach ($entities as $e) {
-            $old_cpt = !empty($e['old_cpt_slug']) ? sanitize_title($e['old_cpt_slug']) : '';
-            $new_cpt = !empty($e['cpt_slug']) ? sanitize_title($e['cpt_slug']) : '';
+        foreach ( $entities as $e ) {
+            $old_cpt = ! empty( $e['old_cpt_slug'] ) ? sanitize_title( $e['old_cpt_slug'] ) : '';
+            $new_cpt = ! empty( $e['cpt_slug'] ) ? sanitize_title( $e['cpt_slug'] ) : '';
 
-            if ($old_cpt && $new_cpt && $old_cpt !== $new_cpt) {
-                $wpdb->update($wpdb->posts, ['post_type' => $new_cpt], ['post_type' => $old_cpt]);
-                $wpdb->update($wpdb->term_taxonomy, ['taxonomy' => $new_cpt . '_category'], ['taxonomy' => $old_cpt . '_category']);
-                $wpdb->update($wpdb->term_taxonomy, ['taxonomy' => $new_cpt . '_tag'], ['taxonomy' => $old_cpt . '_tag']);
+            if ( $old_cpt && $new_cpt && $old_cpt !== $new_cpt ) {
+                $wpdb->update( $wpdb->posts, [ 'post_type' => $new_cpt ], [ 'post_type' => $old_cpt ] );
+                $wpdb->update( $wpdb->term_taxonomy, [ 'taxonomy' => $new_cpt . '_category' ], [ 'taxonomy' => $old_cpt . '_category' ] );
+                $wpdb->update( $wpdb->term_taxonomy, [ 'taxonomy' => $new_cpt . '_tag' ], [ 'taxonomy' => $old_cpt . '_tag' ] );
             }
 
-            if (!empty($e['fields'])) {
-                foreach ($e['fields'] as $f) {
-                    $old_id = !empty($f['old_id']) ? sanitize_text_field($f['old_id']) : '';
-                    $new_id = !empty($f['id']) ? sanitize_text_field($f['id']) : '';
-                    if ($old_id && $new_id && $old_id !== $new_id) {
-                        $wpdb->update($wpdb->postmeta, ['meta_key' => $new_id], ['meta_key' => $old_id]);
+            if ( ! empty( $e['fields'] ) ) {
+                foreach ( $e['fields'] as $f ) {
+                    $old_id = ! empty( $f['old_id'] ) ? sanitize_text_field( $f['old_id'] ) : '';
+                    $new_id = ! empty( $f['id'] ) ? sanitize_text_field( $f['id'] ) : '';
+                    if ( $old_id && $new_id && $old_id !== $new_id ) {
+                        $wpdb->update( $wpdb->postmeta, [ 'meta_key' => $new_id ], [ 'meta_key' => $old_id ] );
                     }
                 }
             }
         }
     }
 
-    /**
-     * Renderiza a página de administração
-     */
+    // Renderiza a página de configurações no painel administrativo
     public function render_admin_page() {
-        $saved_json = get_option('vtx_dynamic_entities', '[]');
-        if (empty($saved_json)) $saved_json = '[]';
+        $saved_json = get_option( $this->option_name, '[]' );
+        if ( empty( $saved_json ) ) {
+            $saved_json = '[]';
+        }
 
         global $wpdb;
-        $post_types = get_post_types(['public' => true, '_builtin' => false], 'objects');
+        $post_types = get_post_types( [ 'public' => true, '_builtin' => false ], 'objects' );
         $available_imports = [];
 
-        foreach ($post_types as $pt) {
+        foreach ( $post_types as $pt ) {
             $slug = $pt->name;
-            $taxonomies = get_object_taxonomies($slug, 'objects');
+            $taxonomies = get_object_taxonomies( $slug, 'objects' );
             $cat_slug = ''; $cat_name = ''; $tag_slug = ''; $tag_name = '';
-            foreach ($taxonomies as $tax) {
-                if ($tax->hierarchical && empty($cat_slug)) { $cat_slug = $tax->name; $cat_name = $tax->labels->name; }
-                elseif (!$tax->hierarchical && empty($tag_slug)) { $tag_slug = $tax->name; $tag_name = $tax->labels->name; }
+            
+            foreach ( $taxonomies as $tax ) {
+                if ( $tax->hierarchical && empty( $cat_slug ) ) { 
+                    $cat_slug = $tax->name; 
+                    $cat_name = $tax->labels->name; 
+                } elseif ( ! $tax->hierarchical && empty( $tag_slug ) ) { 
+                    $tag_slug = $tax->name; 
+                    $tag_name = $tax->labels->name; 
+                }
             }
 
-            $meta_keys = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT pm.meta_key FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key NOT LIKE '\_%' LIMIT 50", $slug));
+            $meta_keys = $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT pm.meta_key FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE p.post_type = %s AND pm.meta_key NOT LIKE '\_%' LIMIT 50", $slug ) );
             $fields = [];
-            if ($meta_keys) {
-                foreach ($meta_keys as $key) { $fields[] = ['old_id' => $key, 'id' => $key, 'label' => ucwords(str_replace(['_', '-'], ' ', $key)), 'type' => 'text']; }
+            
+            if ( $meta_keys ) {
+                foreach ( $meta_keys as $key ) { 
+                    $fields[] = [ 'old_id' => $key, 'id' => $key, 'label' => ucwords( str_replace( [ '_', '-' ], ' ', $key ) ), 'type' => 'text' ]; 
+                }
             }
 
-            $available_imports[$slug] = [
-                'old_cpt_slug' => $slug, 'cpt_slug' => $slug, 'cpt_name_plural' => $pt->labels->name, 'cpt_name_singular' => $pt->labels->singular_name,
-                'icon' => $pt->menu_icon ? $pt->menu_icon : 'dashicons-admin-post',
-                'cat_slug' => $cat_slug, 'cat_name' => $cat_name, 'tag_slug' => $tag_slug, 'tag_name' => $tag_name, 'fields' => $fields
+            $available_imports[ $slug ] = [
+                'old_cpt_slug'      => $slug, 
+                'cpt_slug'          => $slug, 
+                'cpt_name_plural'   => $pt->labels->name, 
+                'cpt_name_singular' => $pt->labels->singular_name,
+                'icon'              => $pt->menu_icon ? $pt->menu_icon : 'dashicons-admin-post',
+                'cat_slug'          => $cat_slug, 
+                'cat_name'          => $cat_name, 
+                'tag_slug'          => $tag_slug, 
+                'tag_name'          => $tag_name, 
+                'fields'            => $fields
             ];
         }
         ?>
         <div class="wrap">
-            <h1>VETTRYX WP Architect 🏗️</h1>
-            <p>Construa Entidades (CPTs, Taxonomias e Campos) de forma visual e dinâmica.</p>
+            <h1><?php _e( 'VETTRYX Architect 🏗️', 'vettryx-wp-core' ); ?></h1>
+            <p><?php _e( 'Construa Entidades (CPTs, Taxonomias e Campos) de forma visual e dinâmica.', 'vettryx-wp-core' ); ?></p>
 
             <form method="post" action="options.php" id="vtx-architect-form">
-                <?php settings_fields('vtx_architect_settings_group'); ?>
-                <input type="hidden" name="vtx_dynamic_entities" id="vtx_dynamic_entities" value="<?php echo esc_attr($saved_json); ?>" />
+                <?php settings_fields( 'vtx_architect_settings_group' ); ?>
+                <input type="hidden" name="<?php echo esc_attr( $this->option_name ); ?>" id="vtx_dynamic_entities" value="<?php echo esc_attr( $saved_json ); ?>" />
 
                 <div id="vtx-entities-container"></div>
 
-                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 15px; border-left: 4px solid #0073aa; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 15px; border-left: 4px solid #023047; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <button type="button" class="button button-secondary" id="btn-add-entity">+ Adicionar Nova Entidade</button>
                         <span style="color: #ccc;">|</span>
                         <select id="import-cpt-select" style="max-width: 250px;">
                             <option value="">Buscar de outro plugin/tema...</option>
-                            <?php foreach($available_imports as $slug => $data): ?>
-                                <option value="<?php echo esc_attr($slug); ?>"><?php echo esc_html($data['cpt_name_plural']); ?> (<?php echo esc_html($slug); ?>)</option>
+                            <?php foreach( $available_imports as $slug => $data ): ?>
+                                <option value="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $data['cpt_name_plural'] ); ?> (<?php echo esc_html( $slug ); ?>)</option>
                             <?php endforeach; ?>
                         </select>
                         <button type="button" class="button" id="btn-import-dynamic" style="color: #0073aa; border-color: #0073aa;">⚡ Importar</button>
                     </div>
-                    <?php submit_button('Salvar Estruturas', 'primary', 'submit', false); ?>
+                    <?php submit_button( 'Salvar Estruturas', 'primary', 'submit', false ); ?>
                 </div>
             </form>
         </div>
@@ -199,23 +203,19 @@ class Vettryx_WP_Architect_Admin {
             const importSelect = document.getElementById('import-cpt-select');
             const hiddenInput = document.getElementById('vtx_dynamic_entities');
             const form = document.getElementById('vtx-architect-form');
-            const availableImports = <?php echo json_encode($available_imports); ?>;
+            const availableImports = <?php echo json_encode( $available_imports ); ?>;
 
             // Modal Icon Picker Logic
             const iconModal = document.getElementById('vtx-icon-picker-modal');
             const iconGrid = document.getElementById('vtx-icon-grid');
             let currentIconTarget = null; 
 
-            // NOVO: Puxa do arquivo externo js enfileirado
             const dashiconsList = window.vtxDashiconsList || ['dashicons-admin-post'];
 
-            // Preenche o modal de ícones dinamicamente
             iconGrid.innerHTML = dashiconsList.map(icon => `<div class="vtx-icon-item" data-icon="${icon}" title="${icon}"><span class="dashicons ${icon}"></span></div>`).join('');
 
-            // Fecha o Modal
             document.getElementById('btn-close-icon-picker').addEventListener('click', () => iconModal.style.display = 'none');
             
-            // Seleciona o ícone
             iconGrid.addEventListener('click', function(e) {
                 const item = e.target.closest('.vtx-icon-item');
                 if (item && currentIconTarget) {
@@ -329,7 +329,6 @@ class Vettryx_WP_Architect_Admin {
             });
 
             container.addEventListener('click', function(e) {
-                // Abre o picker de ícones
                 if (e.target.classList.contains('btn-open-icon-picker')) {
                     e.preventDefault();
                     currentIconTarget = e.target.closest('.vtx-grid-4');
