@@ -14,7 +14,6 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
-
 // Classe principal do módulo Architect
 class Vettryx_WP_Architect_Admin {
 
@@ -213,7 +212,7 @@ class Vettryx_WP_Architect_Admin {
                             <option value="gallery" ${f.type === 'gallery' ? 'selected' : ''}>Galeria de Fotos</option>
                         </select>
                         <div class="vtx-date-slug-opt" style="display: ${f.type === 'date' ? 'block' : 'none'}; margin-top: 10px; background: #fff; padding: 10px; border-left: 3px solid #0073aa;">
-                            <label><input type="checkbox" class="f-use-slug" ${f.use_as_slug ? 'checked' : ''}> 🔗 <strong>Usar data na URL</strong> (Ex: 20261201-post)</label>
+                            <label><input type="checkbox" class="f-use-slug" ${f.use_as_slug ? 'checked' : ''}> 🔗 <strong>Usar data na URL</strong></label>
                         </div>
                     </div>
                     <div><a href="#" class="vtx-btn-danger btn-remove-field" style="display:block; margin-top:25px;">🗑️</a></div>
@@ -224,7 +223,7 @@ class Vettryx_WP_Architect_Admin {
                 <div class="vtx-entity-card" data-index="${index}">
                     <div class="vtx-entity-header">
                         <h2>Entidade #${index + 1}: <span class="vtx-title-preview">${e.cpt_name_plural || 'Nova'}</span></h2>
-                        <a href="#" class="vtx-btn-danger btn-remove-entity">Remover</a>
+                        <a href="#" class="vtx-btn-danger btn-remove-entity">Remover Entidade</a>
                     </div>
                     <div class="vtx-grid-4">
                         <div><label>Slug</label><input type="hidden" class="e-old-cpt-slug" value="${e.cpt_slug || ''}"><input type="text" class="vtx-input e-cpt-slug" value="${e.cpt_slug || ''}" required></div>
@@ -239,6 +238,11 @@ class Vettryx_WP_Architect_Admin {
                             </div>
                         </div>
                     </div>
+                    
+                    <div style="margin-bottom: 15px; padding: 10px; background: #f0f0f1; border-left: 4px solid #d63638;">
+                        <label><input type="checkbox" class="e-disable-gutenberg" ${e.disable_gutenberg ? 'checked' : ''}> 🚫 <strong>Interface Limpa (Gutenberg-Free):</strong> Desativar o editor de blocos para este CPT e usar o painel clássico simplificado para leigos.</label>
+                    </div>
+
                     <div class="vtx-section-title">Página de Arquivo (Global)</div>
                     <div class="vtx-grid-2">
                         <div><label>Título</label><input type="text" class="vtx-input e-archive-title" value="${e.archive_title || ''}"></div>
@@ -288,7 +292,9 @@ class Vettryx_WP_Architect_Admin {
                         icon: card.querySelector('.e-icon').value.trim(), archive_title: card.querySelector('.e-archive-title').value.trim(),
                         archive_desc: card.querySelector('.e-archive-desc').value.trim(), cat_slug: card.querySelector('.e-cat-slug').value.trim(),
                         cat_name: card.querySelector('.e-cat-name').value.trim(), tag_slug: card.querySelector('.e-tag-slug').value.trim(),
-                        tag_name: card.querySelector('.e-tag-name').value.trim(), fields: []
+                        tag_name: card.querySelector('.e-tag-name').value.trim(), 
+                        disable_gutenberg: card.querySelector('.e-disable-gutenberg') ? card.querySelector('.e-disable-gutenberg').checked : false,
+                        fields: []
                     };
                     card.querySelectorAll('.vtx-field-row').forEach(row => {
                         const id = row.querySelector('.f-id').value.trim();

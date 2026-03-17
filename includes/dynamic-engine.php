@@ -1,10 +1,8 @@
 <?php
 /**
  * Vettryx WP Architect Dynamic Engine
- * 
- * Gerencia o registro dinâmico de CPTs e Taxonomias com base nas configurações do usuário.
- * 
- * @package Vettryx_WP_Architect
+ * * Gerencia o registro dinâmico de CPTs e Taxonomias com base nas configurações do usuário.
+ * * @package Vettryx_WP_Architect
  * @since 1.0.0
  */
 
@@ -25,12 +23,29 @@ class Vettryx_WP_Architect_Engine {
         // Filtros para limpar e customizar os Títulos e Descrições de Arquivo
         add_filter('get_the_archive_title', [$this, 'filter_archive_title']);
         add_filter('get_the_archive_description', [$this, 'filter_archive_description']);
+        
+        // Hook para desativar o Gutenberg condicionalmente
+        add_filter('use_block_editor_for_post_type', [$this, 'disable_gutenberg_conditionally'], 10, 2);
+    }
+
+    /**
+     * Intercepta o carregamento do editor e desativa o Gutenberg se a opção estiver marcada
+     */
+    public function disable_gutenberg_conditionally($current_status, $post_type) {
+        $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
+        if (!is_array($entities)) return $current_status;
+
+        foreach ($entities as $e) {
+            if ($e['cpt_slug'] === $post_type && !empty($e['disable_gutenberg'])) {
+                return false; // Força o editor clássico para este CPT
+            }
+        }
+        return $current_status;
     }
 
     /**
      * Filtra o título da página de arquivo
-     * 
-     * @param string $title Título original da página de arquivo
+     * * @param string $title Título original da página de arquivo
      * @return string Título customizado
      */
     public function filter_archive_title($title) {
@@ -52,8 +67,7 @@ class Vettryx_WP_Architect_Engine {
 
     /**
      * Filtra a descrição da página de arquivo
-     * 
-     * @param string $description Descrição original da página de arquivo
+     * * @param string $description Descrição original da página de arquivo
      * @return string Descrição customizada
      */
     public function filter_archive_description($description) {
@@ -73,8 +87,7 @@ class Vettryx_WP_Architect_Engine {
 
     /**
      * Registra as entidades dinâmicas (CPTs e Taxonomias)
-     * 
-     * Executado no hook 'init' para registrar todos os tipos de conteúdo dinâmicos
+     * * Executado no hook 'init' para registrar todos os tipos de conteúdo dinâmicos
      */
     public function register_dynamic_entities() {
         $saved_json = get_option('vtx_dynamic_entities', '[]');
