@@ -19,6 +19,7 @@ class Vettryx_WP_Architect_Engine {
     public function __construct() {
         add_action('init', [$this, 'register_dynamic_entities']);
         add_action('update_option_vtx_dynamic_entities', 'flush_rewrite_rules');
+        add_action('admin_head', [$this, 'inject_vettryx_clean_ui']);
         
         // Filtros para limpar e customizar os Títulos e Descrições de Arquivo
         add_filter('get_the_archive_title', [$this, 'filter_archive_title']);
@@ -105,11 +106,17 @@ class Vettryx_WP_Architect_Engine {
                 'edit_item' => 'Editar ' . esc_html($e['cpt_name_singular']), 'all_items' => 'Todos os ' . esc_html($e['cpt_name_plural']),
             ];
 
+            // Define os suportes dinamicamente com base no toggle do Gutenberg
+            $supports = ['title', 'thumbnail', 'excerpt'];
+            if (empty($e['disable_gutenberg'])) {
+                $supports[] = 'editor';
+            }
+
             $args = [
                 'labels' => $labels, 'public' => true, 'publicly_queryable' => true, 'show_ui' => true, 'show_in_menu' => true,
                 'menu_icon' => !empty($e['icon']) ? sanitize_html_class($e['icon']) : 'dashicons-admin-post',
                 'capability_type' => 'post', 'has_archive' => true, 'hierarchical' => false, 'menu_position' => 5,
-                'supports' => ['title', 'editor', 'thumbnail', 'excerpt'], 'show_in_rest' => true, 
+                'supports' => $supports, 'show_in_rest' => true, 
                 'rewrite' => ['slug' => $slug, 'with_front' => false],
             ];
             register_post_type($slug, $args);
@@ -124,5 +131,88 @@ class Vettryx_WP_Architect_Engine {
                 register_taxonomy($slug . '_tag', [$slug], ['hierarchical' => false, 'labels' => ['name' => esc_html($e['tag_name']), 'singular_name' => esc_html($e['tag_name']), 'menu_name' => esc_html($e['tag_name'])], 'show_ui' => true, 'show_admin_column' => true, 'query_var' => true, 'rewrite' => ['slug' => $tag_slug, 'with_front' => false], 'show_in_rest' => true]);
             }
         }
+    }
+
+    /**
+     * Injeta CSS no painel para mascarar o WordPress e dar visual de sistema SaaS
+     */
+    public function inject_vettryx_clean_ui() {
+        global $typenow;
+        if (empty($typenow)) return;
+
+        $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
+        if (!is_array($entities)) return;
+
+        $is_clean_ui = false;
+        foreach ($entities as $e) {
+            if ($e['cpt_slug'] === $typenow && !empty($e['disable_gutenberg'])) {
+                $is_clean_ui = true;
+                break;
+            }
+        }
+
+        if (!$is_clean_ui) return;
+
+        // O CSS que transforma o painel
+        ?>
+        <style>
+            /* Fundo da tela mais limpo e esconde lixos do WP */
+            body { background-color: #f4f6f8; }
+            #post-status-info, #post-body-content .wp-heading-inline { display: none !important; }
+            
+            /* Campo de Título Moderno */
+            #titlediv #title {
+                padding: 15px 20px;
+                font-size: 24px;
+                font-weight: 600;
+                border: 1px solid #ccd0d4;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            }
+
+            /* Cards de Meta Boxes (Visual VETTRYX) */
+            .postbox {
+                border: 1px solid #ccd0d4 !important;
+                border-radius: 8px !important;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.03) !important;
+                margin-bottom: 20px !important;
+            }
+            .postbox .hndle {
+                background: #fff;
+                border-bottom: 1px solid #eee;
+                border-radius: 8px 8px 0 0;
+                padding: 15px 20px;
+                font-size: 16px;
+                font-weight: 600;
+                color: #023047; /* Azul VETTRYX */
+            }
+            .postbox .inside { padding: 20px; }
+
+            /* Truque CSS: Renomeia "Resumo" para "Descrição" */
+            #postexcerpt .hndle span { font-size: 0; }
+            #postexcerpt .hndle span:before {
+                content: "Descrição (Aparece na tela do projeto)";
+                font-size: 16px;
+            }
+            #postexcerpt p { display: none; } /* Esconde o texto inútil de ajuda */
+            #postexcerpt textarea { height: 120px; border-radius: 6px; }
+            
+            /* Botão de Publicar Bombado */
+            #publish {
+                background: #0073aa;
+                border-color: #0073aa;
+                color: #fff;
+                font-size: 16px;
+                padding: 10px 20px;
+                height: auto;
+                border-radius: 6px;
+                width: 100%;
+                text-transform: uppercase;
+                font-weight: bold;
+                transition: all 0.3s;
+            }
+            #publish:hover { background: #005177; transform: scale(1.02); }
+        </style>
+        <?php
     }
 }
