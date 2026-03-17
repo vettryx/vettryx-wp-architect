@@ -15,82 +15,75 @@ class Vettryx_WP_Architect_Shortcodes {
 
         foreach ($entities as $e) {
             if (empty($e['cpt_slug'])) continue;
-
             $cpt_slug = sanitize_title($e['cpt_slug']);
 
-            // 1. Gera Shortcodes para os Campos Personalizados
+            // 1. Campos Personalizados
             if (!empty($e['fields'])) {
                 foreach ($e['fields'] as $field) {
                     $field_id = sanitize_text_field($field['id']);
                     $field_type = sanitize_text_field($field['type']);
-                    
-                    $shortcode_tag = "vtx_{$cpt_slug}_{$field_id}";
-
-                    add_shortcode($shortcode_tag, function($atts) use ($field_id, $field_type) {
-                        // Aceita o parâmetro ID, senão cai pro fallback da página atual
+                    add_shortcode("vtx_{$cpt_slug}_{$field_id}", function($atts) use ($field_id, $field_type) {
                         $a = shortcode_atts(['id' => ''], $atts);
                         $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
-
                         if (!$post_id) return '';
-
                         $value = get_post_meta($post_id, $field_id, true);
                         if (empty($value)) return '';
-
                         return Vettryx_WP_Architect_Shortcodes::format_output($value, $field_type);
                     });
                 }
             }
 
-            // 2. Gera Shortcode para Categorias
+            // 2. Taxonomias
             if (!empty($e['cat_slug'])) {
                 $cat_tax = $cpt_slug . '_category';
                 add_shortcode("vtx_{$cpt_slug}_categorias", function($atts) use ($cat_tax) {
                     $a = shortcode_atts(['id' => ''], $atts);
-                    $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
-                    return Vettryx_WP_Architect_Shortcodes::format_taxonomy($post_id, $cat_tax, 'category');
+                    return Vettryx_WP_Architect_Shortcodes::format_taxonomy(!empty($a['id']) ? intval($a['id']) : get_the_ID(), $cat_tax, 'category');
                 });
             }
 
-            // 3. Gera Shortcode para Tags
             if (!empty($e['tag_slug'])) {
                 $tag_tax = $cpt_slug . '_tag';
                 add_shortcode("vtx_{$cpt_slug}_tags", function($atts) use ($tag_tax) {
                     $a = shortcode_atts(['id' => ''], $atts);
-                    $post_id = !empty($a['id']) ? intval($a['id']) : get_the_ID();
-                    return Vettryx_WP_Architect_Shortcodes::format_taxonomy($post_id, $tag_tax, 'tag');
+                    return Vettryx_WP_Architect_Shortcodes::format_taxonomy(!empty($a['id']) ? intval($a['id']) : get_the_ID(), $tag_tax, 'tag');
                 });
             }
+
+            // 3. Página de Arquivo (Global)
+            add_shortcode("vtx_{$cpt_slug}_arquivo_titulo", function() use ($e, $cpt_slug) {
+                if (is_tax($cpt_slug . '_category') || is_tax($cpt_slug . '_tag')) {
+                    $term = get_queried_object();
+                    return ($term && isset($term->name)) ? $term->name : '';
+                }
+                return !empty($e['archive_title']) ? esc_html($e['archive_title']) : esc_html($e['cpt_name_plural']);
+            });
+
+            add_shortcode("vtx_{$cpt_slug}_arquivo_descricao", function() use ($e, $cpt_slug) {
+                if (is_tax($cpt_slug . '_category') || is_tax($cpt_slug . '_tag')) {
+                    $term = get_queried_object();
+                    return ($term && isset($term->description)) ? wpautop($term->description) : '';
+                }
+                return !empty($e['archive_desc']) ? wpautop(wp_kses_post($e['archive_desc'])) : '';
+            });
         }
     }
 
-    // --- MÉTODOS ESTÁTICOS DE FORMATAÇÃO HTML ---
-
     public static function format_output($value, $type) {
         switch ($type) {
-            case 'url':
-                return '<a href="' . esc_url($value) . '" class="vtx-sc-url" target="_blank" rel="noopener">' . esc_url($value) . '</a>';
-            
-            case 'textarea':
-                return wpautop(esc_html($value));
-            
-            case 'image':
-                $img_url = wp_get_attachment_image_url($value, 'large');
-                return $img_url ? '<img src="' . esc_url($img_url) . '" class="vtx-sc-image" style="max-width:100%; height:auto; border-radius:8px; display:block;">' : '';
-            
+            case 'url': return '<a href="' . esc_url($value) . '" class="vtx-sc-url" target="_blank" rel="noopener">' . esc_url($value) . '</a>';
+            case 'textarea': return wpautop(esc_html($value));
+            case 'image': $img_url = wp_get_attachment_image_url($value, 'large'); return $img_url ? '<img src="' . esc_url($img_url) . '" class="vtx-sc-image" style="max-width:100%; height:auto; border-radius:8px; display:block;">' : '';
             case 'gallery':
                 $ids = explode(',', $value);
                 $html = '<div class="vtx-sc-gallery" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:15px;">';
                 foreach ($ids as $id) {
                     $img_url = wp_get_attachment_image_url($id, 'large');
-                    if ($img_url) {
-                        $html .= '<img src="' . esc_url($img_url) . '" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px;">';
-                    }
+                    if ($img_url) $html .= '<img src="' . esc_url($img_url) . '" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px;">';
                 }
                 $html .= '</div>';
                 return $html;
-            
-            default: // text
-                return esc_html($value);
+            default: return esc_html($value);
         }
     }
 
@@ -98,7 +91,6 @@ class Vettryx_WP_Architect_Shortcodes {
         if (!$post_id) return '';
         $terms = get_the_terms($post_id, $taxonomy);
         if (!$terms || is_wp_error($terms)) return '';
-
         $html = [];
         foreach ($terms as $term) {
             $link = get_term_link($term);
