@@ -52,11 +52,64 @@ class Vettryx_WP_Architect_Admin {
     }
 
     // ==========================================
-    // INTERFACE VISUAL
+    // INTERFACE VISUAL E RASTREADOR DE TERCEIROS
     // ==========================================
     public function render_admin_page() {
         $saved_json = get_option('vtx_dynamic_entities', '[]');
         if (empty($saved_json)) $saved_json = '[]';
+
+        // RASTREADOR DE CPTs E CAMPOS EXISTENTES
+        global $wpdb;
+        $post_types = get_post_types(['public' => true, '_builtin' => false], 'objects');
+        $available_imports = [];
+
+        foreach ($post_types as $pt) {
+            $slug = $pt->name;
+            
+            // Busca Taxonomias
+            $taxonomies = get_object_taxonomies($slug, 'objects');
+            $cat_slug = ''; $cat_name = ''; $tag_slug = ''; $tag_name = '';
+            
+            foreach ($taxonomies as $tax) {
+                if ($tax->hierarchical && empty($cat_slug)) {
+                    $cat_slug = $tax->name; $cat_name = $tax->labels->name;
+                } elseif (!$tax->hierarchical && empty($tag_slug)) {
+                    $tag_slug = $tax->name; $tag_name = $tax->labels->name;
+                }
+            }
+
+            // Busca Meta Keys exclusivas do CPT (limitado a 50 para performance)
+            $meta_keys = $wpdb->get_col($wpdb->prepare("
+                SELECT DISTINCT pm.meta_key
+                FROM {$wpdb->postmeta} pm
+                JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                WHERE p.post_type = %s AND pm.meta_key NOT LIKE '\_%'
+                LIMIT 50
+            ", $slug));
+
+            $fields = [];
+            if ($meta_keys) {
+                foreach ($meta_keys as $key) {
+                    $fields[] = [
+                        'old_id' => $key,
+                        'id' => $key,
+                        'label' => ucwords(str_replace(['_', '-'], ' ', $key)),
+                        'type' => 'text' // Padrão universal, usuário ajusta na tela
+                    ];
+                }
+            }
+
+            $available_imports[$slug] = [
+                'old_cpt_slug' => $slug,
+                'cpt_slug' => $slug,
+                'cpt_name_plural' => $pt->labels->name,
+                'cpt_name_singular' => $pt->labels->singular_name,
+                'icon' => $pt->menu_icon ? $pt->menu_icon : 'dashicons-admin-post',
+                'cat_slug' => $cat_slug, 'cat_name' => $cat_name,
+                'tag_slug' => $tag_slug, 'tag_name' => $tag_name,
+                'fields' => $fields
+            ];
+        }
         ?>
         <div class="wrap">
             <h1>VETTRYX WP Architect 🏗️</h1>
@@ -68,10 +121,19 @@ class Vettryx_WP_Architect_Admin {
 
                 <div id="vtx-entities-container"></div>
 
-                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between;">
-                    <div>
+                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 15px; border-left: 4px solid #0073aa; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+                    <div style="display: flex; gap: 10px; align-items: center;">
                         <button type="button" class="button button-secondary" id="btn-add-entity">+ Adicionar Nova Entidade</button>
-                        <button type="button" class="button" id="btn-import-legacy" style="margin-left: 10px; color: #0073aa; border-color: #0073aa;">⚡ Importar Legado (Portfolio & Gallery)</button>
+                        
+                        <span style="color: #ccc;">|</span>
+                        
+                        <select id="import-cpt-select" style="max-width: 250px;">
+                            <option value="">Buscar de outro plugin/tema...</option>
+                            <?php foreach($available_imports as $slug => $data): ?>
+                                <option value="<?php echo esc_attr($slug); ?>"><?php echo esc_html($data['cpt_name_plural']); ?> (<?php echo esc_html($slug); ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="button" class="button" id="btn-import-dynamic" style="color: #0073aa; border-color: #0073aa;">⚡ Importar</button>
                     </div>
                     <?php submit_button('Salvar Estruturas', 'primary', 'submit', false); ?>
                 </div>
@@ -99,9 +161,12 @@ class Vettryx_WP_Architect_Admin {
         document.addEventListener('DOMContentLoaded', function() {
             const container = document.getElementById('vtx-entities-container');
             const btnAddEntity = document.getElementById('btn-add-entity');
-            const btnImportLegacy = document.getElementById('btn-import-legacy');
+            const btnImportDynamic = document.getElementById('btn-import-dynamic');
+            const importSelect = document.getElementById('import-cpt-select');
             const hiddenInput = document.getElementById('vtx_dynamic_entities');
             const form = document.getElementById('vtx-architect-form');
+
+            const availableImports = <?php echo json_encode($available_imports); ?>;
 
             let entities = [];
             try { entities = JSON.parse(hiddenInput.value || '[]'); } catch (e) { entities = []; }
@@ -193,38 +258,20 @@ class Vettryx_WP_Architect_Admin {
 
             btnAddEntity.addEventListener('click', () => { entities.push({ fields: [] }); render(); });
 
-            // Lógica do Importador Legado Automático
-            btnImportLegacy.addEventListener('click', () => {
-                if(!confirm('Deseja injetar as estruturas completas do Fast Gallery, Projects e Skills no construtor?')) return;
+            // Lógica do RASTREADOR DE TERCEIROS
+            btnImportDynamic.addEventListener('click', () => {
+                const selectedSlug = importSelect.value;
+                if (!selectedSlug) {
+                    alert('Selecione um Post Type na lista para importar.');
+                    return;
+                }
                 
-                const legacyPortfolio = {
-                    old_cpt_slug: '', cpt_slug: 'projects', cpt_name_plural: 'Projetos', cpt_name_singular: 'Projeto', icon: 'dashicons-portfolio',
-                    cat_slug: '', cat_name: '', tag_slug: '', tag_name: '',
-                    fields: [
-                        { old_id: '', id: 'project_url', label: 'URL do Projeto', type: 'url' },
-                        { old_id: '', id: 'project_company', label: 'Nome da Empresa/Cliente', type: 'text' }
-                    ]
-                };
-
-                const legacyGallery = {
-                    old_cpt_slug: '', cpt_slug: 'vtx_gallery', cpt_name_plural: 'Meus Trabalhos', cpt_name_singular: 'Trabalho/Álbum', icon: 'dashicons-format-gallery',
-                    cat_slug: 'tipo-servico', cat_name: 'Tipos de Serviço', tag_slug: 'detalhe-servico', tag_name: 'Serviços Detalhados',
-                    fields: [
-                        { old_id: '', id: 'vtx_service_desc', label: 'Descrição do Serviço', type: 'textarea' },
-                        { old_id: '', id: 'vtx_service_location', label: 'Local (Opcional)', type: 'text' },
-                        { old_id: '', id: 'vtx_gallery_before', label: 'Fotos do Antes', type: 'gallery' },
-                        { old_id: '', id: 'vtx_gallery_after', label: 'Fotos do Depois', type: 'gallery' }
-                    ]
-                };
-
-                const legacySkills = {
-                    old_cpt_slug: '', cpt_slug: 'skills', cpt_name_plural: 'Skills', cpt_name_singular: 'Skill', icon: 'dashicons-welcome-learn-more',
-                    cat_slug: '', cat_name: '', tag_slug: '', tag_name: '', fields: []
-                };
-
-                entities.push(legacyPortfolio, legacyGallery, legacySkills);
-                render();
-                alert('Estruturas importadas com sucesso! Role a tela e clique no botão azul "Salvar Estruturas" para aplicar no banco de dados.');
+                const importData = availableImports[selectedSlug];
+                if(confirm(`Deseja importar a estrutura de "${importData.cpt_name_plural}" e seus campos detectados?`)) {
+                    entities.push(importData);
+                    render();
+                    alert('Estrutura importada! Verifique os campos listados (como não temos como adivinhar os tipos de campos de plugins de terceiros, todos foram configurados como "Texto Curto". Ajuste para URL, Galeria ou Imagem se necessário e clique em Salvar).');
+                }
             });
 
             container.addEventListener('click', function(e) {
