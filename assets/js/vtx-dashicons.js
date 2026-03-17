@@ -1,4 +1,12 @@
-// assets/js/vtx-dashicons.js
+/**
+ * Vettryx WP Architect Dashicons List
+ * 
+ * Lista de ícones Dashicons para uso no plugin
+ * 
+ * @package Vettryx_WP_Architect
+ * @since 1.0.0
+ */
+
 window.vtxDashiconsList = [
     'dashicons-menu', 'dashicons-admin-site', 'dashicons-dashboard', 'dashicons-admin-post', 
     'dashicons-admin-media', 'dashicons-admin-links', 'dashicons-admin-page', 'dashicons-admin-comments', 

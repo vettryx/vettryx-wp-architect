@@ -1,10 +1,27 @@
 <?php
+/**
+ * Vettryx WP Architect Admin Interface
+ * 
+ * Gerencia a página de administração do plugin, incluindo formulários dinâmicos
+ * para criação de CPTs, Taxonomias e Campos Personalizados.
+ * 
+ * @package Vettryx_WP_Architect
+ * @since 1.0.0
+ */
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Classe principal da interface de administração
+ */
 class Vettryx_WP_Architect_Admin {
 
+    /**
+     * Construtor da classe
+     * Adiciona os hooks necessários para a interface de administração
+     */
     public function __construct() {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
@@ -14,6 +31,11 @@ class Vettryx_WP_Architect_Admin {
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
     }
 
+    /**
+     * Enfileira scripts e estilos customizados para a página do plugin
+     * 
+     * @param string $hook Hook da página atual
+     */
     public function enqueue_admin_assets($hook) {
         // Carrega o JS apenas se estivermos na página do VETTRYX Architect
         if ($hook !== 'toplevel_page_vtx-architect') {
@@ -25,14 +47,26 @@ class Vettryx_WP_Architect_Admin {
         wp_enqueue_script('vtx-dashicons-list', $plugin_url . 'assets/js/vtx-dashicons.js', [], '1.0.0', true);
     }
 
+    /**
+     * Adiciona a página de administração ao menu do WordPress
+     */
     public function add_admin_menu() {
         add_menu_page('VETTRYX Architect', 'Architect', 'manage_options', 'vtx-architect', [$this, 'render_admin_page'], 'dashicons-layout', 80);
     }
 
+    /**
+     * Registra as configurações do plugin
+     */
     public function register_settings() {
         register_setting('vtx_architect_settings_group', 'vtx_dynamic_entities');
     }
 
+    /**
+     * Migra entidades do banco de dados
+     * 
+     * @param string $old_value Valor antigo da opção
+     * @param string $new_value Valor novo da opção
+     */
     public function migrate_database_entities($old_value, $new_value) {
         global $wpdb;
         $entities = json_decode($new_value, true);
@@ -60,6 +94,9 @@ class Vettryx_WP_Architect_Admin {
         }
     }
 
+    /**
+     * Renderiza a página de administração
+     */
     public function render_admin_page() {
         $saved_json = get_option('vtx_dynamic_entities', '[]');
         if (empty($saved_json)) $saved_json = '[]';
