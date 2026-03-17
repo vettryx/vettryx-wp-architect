@@ -57,9 +57,11 @@ class Vettryx_WP_Architect_Admin {
             .vtx-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
             .vtx-section-title { font-weight: 600; margin: 20px 0 10px; padding-top: 15px; border-top: 1px dashed #ccc; color: #444; }
             .vtx-fields-container { background: #f9f9f9; border: 1px solid #e2e4e7; padding: 15px; border-radius: 4px; }
-            .vtx-field-row { display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+            .vtx-field-row { display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 10px; align-items: start; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
             .vtx-field-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
             .vtx-input { width: 100%; }
+            .vtx-sc-hint-input { margin-top:5px; width:100%; background:transparent; border:none; color:#d63638; font-family:monospace; font-weight:bold; cursor:pointer; padding:0; box-shadow:none !important; }
+            .vtx-sc-hint-input:focus { outline:none; }
         </style>
 
         <script>
@@ -72,7 +74,7 @@ class Vettryx_WP_Architect_Admin {
             let entities = [];
             try { entities = JSON.parse(hiddenInput.value || '[]'); } catch (e) { entities = []; }
 
-            const fieldTemplate = (f = {}) => `
+            const fieldTemplate = (f = {}, cptSlug = 'slug') => `
                 <div class="vtx-field-row">
                     <div>
                         <label>Label do Campo <small>(Ex: Link do Projeto)</small></label>
@@ -81,6 +83,7 @@ class Vettryx_WP_Architect_Admin {
                     <div>
                         <label>ID do Campo <small>(Ex: link_projeto)</small></label>
                         <input type="text" class="regular-text vtx-input f-id" value="${f.id || ''}" placeholder="slug_do_campo">
+                        <input type="text" readonly class="vtx-sc-hint-input vtx-sc-hint" value="[vtx_${cptSlug}_${f.id || 'id'}]" onfocus="this.select();" title="Clique para copiar">
                     </div>
                     <div>
                         <label>Tipo</label>
@@ -93,7 +96,7 @@ class Vettryx_WP_Architect_Admin {
                         </select>
                     </div>
                     <div>
-                        <a href="#" class="vtx-btn-danger btn-remove-field" title="Remover Campo">🗑️</a>
+                        <a href="#" class="vtx-btn-danger btn-remove-field" style="display:block; margin-top:25px;" title="Remover Campo">🗑️</a>
                     </div>
                 </div>
             `;
@@ -129,19 +132,23 @@ class Vettryx_WP_Architect_Admin {
                         <div style="background:#f0f0f1; padding:10px; border-radius:4px;">
                             <strong>Categorias</strong><br><br>
                             <label>Slug: </label> <input type="text" class="vtx-input e-cat-slug" value="${e.cat_slug || ''}" placeholder="Ex: tipo-projeto"><br><br>
-                            <label>Nome: </label> <input type="text" class="vtx-input e-cat-name" value="${e.cat_name || ''}" placeholder="Ex: Tipos de Projeto">
+                            <label>Nome: </label> <input type="text" class="vtx-input e-cat-name" value="${e.cat_name || ''}" placeholder="Ex: Tipos de Projeto"><br><br>
+                            <label style="font-size:12px; color:#666;">Shortcode da Categoria:</label>
+                            <input type="text" readonly class="vtx-sc-hint-input vtx-sc-cat-hint" value="[vtx_${e.cpt_slug || 'slug'}_categorias]" onfocus="this.select();" title="Clique para copiar">
                         </div>
                         <div style="background:#f0f0f1; padding:10px; border-radius:4px;">
                             <strong>Tags (Micro-segmentação)</strong><br><br>
                             <label>Slug: </label> <input type="text" class="vtx-input e-tag-slug" value="${e.tag_slug || ''}" placeholder="Ex: detalhe-projeto"><br><br>
-                            <label>Nome: </label> <input type="text" class="vtx-input e-tag-name" value="${e.tag_name || ''}" placeholder="Ex: Detalhes do Projeto">
+                            <label>Nome: </label> <input type="text" class="vtx-input e-tag-name" value="${e.tag_name || ''}" placeholder="Ex: Detalhes do Projeto"><br><br>
+                            <label style="font-size:12px; color:#666;">Shortcode da Tag:</label>
+                            <input type="text" readonly class="vtx-sc-hint-input vtx-sc-tag-hint" value="[vtx_${e.cpt_slug || 'slug'}_tags]" onfocus="this.select();" title="Clique para copiar">
                         </div>
                     </div>
 
                     <div class="vtx-section-title">Campos Personalizados (Meta Boxes)</div>
                     <div class="vtx-fields-container">
                         <div class="fields-wrapper">
-                            ${(e.fields || []).map(f => fieldTemplate(f)).join('')}
+                            ${(e.fields || []).map(f => fieldTemplate(f, e.cpt_slug)).join('')}
                         </div>
                         <button type="button" class="button btn-add-field" style="margin-top: 15px;">+ Adicionar Campo</button>
                     </div>
@@ -163,7 +170,9 @@ class Vettryx_WP_Architect_Admin {
                 }
                 if (e.target.classList.contains('btn-add-field')) {
                     e.preventDefault();
-                    e.target.previousElementSibling.insertAdjacentHTML('beforeend', fieldTemplate());
+                    const card = e.target.closest('.vtx-entity-card');
+                    const cptSlug = card.querySelector('.e-cpt-slug').value.trim() || 'slug';
+                    e.target.previousElementSibling.insertAdjacentHTML('beforeend', fieldTemplate({}, cptSlug));
                 }
                 if (e.target.classList.contains('btn-remove-field')) {
                     e.preventDefault();
@@ -171,9 +180,29 @@ class Vettryx_WP_Architect_Admin {
                 }
             });
 
+            // Motor de atualização em tempo real
             container.addEventListener('input', function(e) {
+                const card = e.target.closest('.vtx-entity-card');
+                if (!card) return;
+
                 if (e.target.classList.contains('e-cpt-plural')) {
-                    e.target.closest('.vtx-entity-card').querySelector('.vtx-title-preview').innerText = e.target.value || 'Nova';
+                    card.querySelector('.vtx-title-preview').innerText = e.target.value || 'Nova';
+                }
+
+                if (e.target.classList.contains('e-cpt-slug') || e.target.classList.contains('f-id')) {
+                    const cptSlug = card.querySelector('.e-cpt-slug').value.trim() || 'slug';
+                    
+                    card.querySelectorAll('.vtx-field-row').forEach(row => {
+                        const fId = row.querySelector('.f-id').value.trim() || 'id';
+                        const hint = row.querySelector('.vtx-sc-hint');
+                        if (hint) hint.value = `[vtx_${cptSlug}_${fId}]`;
+                    });
+
+                    const catHint = card.querySelector('.vtx-sc-cat-hint');
+                    if (catHint) catHint.value = `[vtx_${cptSlug}_categorias]`;
+
+                    const tagHint = card.querySelector('.vtx-sc-tag-hint');
+                    if (tagHint) tagHint.value = `[vtx_${cptSlug}_tags]`;
                 }
             });
 
