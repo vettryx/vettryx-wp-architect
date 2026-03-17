@@ -17,29 +17,115 @@ if (!defined('ABSPATH')) {
 class Vettryx_WP_Architect {
 
     public function __construct() {
+        // Fase 1: Interface e Armazenamento
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        
+        // Fase 2: Motor de Ignição (Registro no WP)
+        add_action('init', [$this, 'register_dynamic_entities']);
+        
+        // Flush de permalinks automático ao salvar as configurações
+        add_action('update_option_vtx_dynamic_entities', 'flush_rewrite_rules');
     }
 
+    // ==========================================
+    // 1. MOTOR DE IGNIÇÃO (FASE 2)
+    // ==========================================
+    
+    public function register_dynamic_entities() {
+        $saved_json = get_option('vtx_dynamic_entities', '[]');
+        $entities = json_decode($saved_json, true);
+
+        if (!is_array($entities) || empty($entities)) return;
+
+        foreach ($entities as $e) {
+            if (empty($e['cpt_slug']) || empty($e['cpt_name_plural'])) continue;
+
+            $slug = sanitize_title($e['cpt_slug']);
+            
+            // 1.1. Registra o Custom Post Type
+            $labels = [
+                'name'               => esc_html($e['cpt_name_plural']),
+                'singular_name'      => esc_html($e['cpt_name_singular']),
+                'menu_name'          => esc_html($e['cpt_name_plural']),
+                'add_new'            => 'Adicionar Novo',
+                'add_new_item'       => 'Adicionar ' . esc_html($e['cpt_name_singular']),
+                'edit_item'          => 'Editar ' . esc_html($e['cpt_name_singular']),
+                'all_items'          => 'Todos os ' . esc_html($e['cpt_name_plural']),
+            ];
+
+            $args = [
+                'labels'             => $labels,
+                'public'             => true,
+                'publicly_queryable' => true,
+                'show_ui'            => true,
+                'show_in_menu'       => true,
+                'menu_icon'          => !empty($e['icon']) ? sanitize_html_class($e['icon']) : 'dashicons-admin-post',
+                'capability_type'    => 'post',
+                'has_archive'        => true,
+                'hierarchical'       => false,
+                'menu_position'      => 5,
+                'supports'           => ['title', 'editor', 'thumbnail', 'excerpt'], 
+                'show_in_rest'       => true, // Essencial para Elementor e Gutenberg
+                'rewrite'            => ['slug' => $slug, 'with_front' => false],
+            ];
+
+            register_post_type($slug, $args);
+
+            // 1.2. Registra Taxonomia (Categorias)
+            if (!empty($e['cat_slug']) && !empty($e['cat_name'])) {
+                $cat_slug = sanitize_title($e['cat_slug']);
+                $cat_args = [
+                    'hierarchical'      => true,
+                    'labels'            => [
+                        'name'          => esc_html($e['cat_name']),
+                        'singular_name' => esc_html($e['cat_name']),
+                        'menu_name'     => esc_html($e['cat_name']),
+                    ],
+                    'show_ui'           => true,
+                    'show_admin_column' => true,
+                    'query_var'         => true,
+                    'rewrite'           => ['slug' => $cat_slug, 'with_front' => false],
+                    'show_in_rest'      => true,
+                ];
+                // Cria a taxonomia amarrando ao CPT gerado
+                register_taxonomy($slug . '_category', [$slug], $cat_args);
+            }
+
+            // 1.3. Registra Taxonomia (Tags)
+            if (!empty($e['tag_slug']) && !empty($e['tag_name'])) {
+                $tag_slug = sanitize_title($e['tag_slug']);
+                $tag_args = [
+                    'hierarchical'      => false,
+                    'labels'            => [
+                        'name'          => esc_html($e['tag_name']),
+                        'singular_name' => esc_html($e['tag_name']),
+                        'menu_name'     => esc_html($e['tag_name']),
+                    ],
+                    'show_ui'           => true,
+                    'show_admin_column' => true,
+                    'query_var'         => true,
+                    'rewrite'           => ['slug' => $tag_slug, 'with_front' => false],
+                    'show_in_rest'      => true, 
+                ];
+                register_taxonomy($slug . '_tag', [$slug], $tag_args);
+            }
+        }
+    }
+
+    // ==========================================
+    // 2. INTERFACE ADMIN E ARMAZENAMENTO (FASE 1)
+    // ==========================================
+
     public function add_admin_menu() {
-        add_menu_page(
-            'VETTRYX Architect',
-            'Architect',
-            'manage_options',
-            'vtx-architect',
-            [$this, 'render_admin_page'],
-            'dashicons-layout',
-            80
-        );
+        add_menu_page('VETTRYX Architect', 'Architect', 'manage_options', 'vtx-architect', [$this, 'render_admin_page'], 'dashicons-layout', 80);
     }
 
     public function register_settings() {
-        // Registra a option que guardará o JSON com toda a arquitetura
         register_setting('vtx_architect_settings_group', 'vtx_dynamic_entities');
     }
 
     public function render_admin_page() {
-        // Puxa os dados salvos para popular o construtor na tela
         $saved_json = get_option('vtx_dynamic_entities', '[]');
         if (empty($saved_json)) $saved_json = '[]';
         ?>
@@ -49,11 +135,9 @@ class Vettryx_WP_Architect {
 
             <form method="post" action="options.php" id="vtx-architect-form">
                 <?php settings_fields('vtx_architect_settings_group'); ?>
-                
                 <input type="hidden" name="vtx_dynamic_entities" id="vtx_dynamic_entities" value="<?php echo esc_attr($saved_json); ?>" />
 
-                <div id="vtx-entities-container">
-                    </div>
+                <div id="vtx-entities-container"></div>
 
                 <div style="margin-top: 20px;">
                     <button type="button" class="button button-secondary" id="btn-add-entity">+ Adicionar Nova Entidade (CPT)</button>
@@ -68,16 +152,12 @@ class Vettryx_WP_Architect {
             .vtx-entity-header h2 { margin: 0; font-size: 1.2em; }
             .vtx-btn-danger { color: #d63638; cursor: pointer; text-decoration: none; font-weight: bold; }
             .vtx-btn-danger:hover { color: #a10000; }
-            
             .vtx-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
             .vtx-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-            
             .vtx-section-title { font-weight: 600; margin: 20px 0 10px; padding-top: 15px; border-top: 1px dashed #ccc; color: #444; }
-            
             .vtx-fields-container { background: #f9f9f9; border: 1px solid #e2e4e7; padding: 15px; border-radius: 4px; }
             .vtx-field-row { display: grid; grid-template-columns: 2fr 2fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
             .vtx-field-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-            
             .vtx-input { width: 100%; }
         </style>
 
@@ -88,15 +168,9 @@ class Vettryx_WP_Architect {
             const hiddenInput = document.getElementById('vtx_dynamic_entities');
             const form = document.getElementById('vtx-architect-form');
 
-            // Carrega os dados do banco ou inicia vazio
             let entities = [];
-            try {
-                entities = JSON.parse(hiddenInput.value || '[]');
-            } catch (e) {
-                entities = [];
-            }
+            try { entities = JSON.parse(hiddenInput.value || '[]'); } catch (e) { entities = []; }
 
-            // --- TEMPLATES ---
             const fieldTemplate = (f = {}) => `
                 <div class="vtx-field-row">
                     <div>
@@ -173,16 +247,9 @@ class Vettryx_WP_Architect {
                 </div>
             `;
 
-            // --- FUNÇÕES DE RENDERIZAÇÃO ---
-            function render() {
-                container.innerHTML = entities.map((e, i) => entityTemplate(e, i)).join('');
-            }
+            function render() { container.innerHTML = entities.map((e, i) => entityTemplate(e, i)).join(''); }
 
-            // --- EVENT LISTENERS (DELEGAÇÃO) ---
-            btnAddEntity.addEventListener('click', () => {
-                entities.push({ fields: [] });
-                render();
-            });
+            btnAddEntity.addEventListener('click', () => { entities.push({ fields: [] }); render(); });
 
             container.addEventListener('click', function(e) {
                 if (e.target.classList.contains('btn-remove-entity')) {
@@ -193,33 +260,25 @@ class Vettryx_WP_Architect {
                         render();
                     }
                 }
-
                 if (e.target.classList.contains('btn-add-field')) {
                     e.preventDefault();
-                    const wrapper = e.target.previousElementSibling;
-                    wrapper.insertAdjacentHTML('beforeend', fieldTemplate());
+                    e.target.previousElementSibling.insertAdjacentHTML('beforeend', fieldTemplate());
                 }
-
                 if (e.target.classList.contains('btn-remove-field')) {
                     e.preventDefault();
                     e.target.closest('.vtx-field-row').remove();
                 }
             });
 
-            // Atualiza o preview do título em tempo real
             container.addEventListener('input', function(e) {
                 if (e.target.classList.contains('e-cpt-plural')) {
-                    const card = e.target.closest('.vtx-entity-card');
-                    card.querySelector('.vtx-title-preview').innerText = e.target.value || 'Nova';
+                    e.target.closest('.vtx-entity-card').querySelector('.vtx-title-preview').innerText = e.target.value || 'Nova';
                 }
             });
 
-            // --- LÓGICA DE SALVAMENTO (Compila o HTML de volta pra JSON) ---
             form.addEventListener('submit', function() {
                 const compiledEntities = [];
-                const cards = container.querySelectorAll('.vtx-entity-card');
-                
-                cards.forEach(card => {
+                container.querySelectorAll('.vtx-entity-card').forEach(card => {
                     const entity = {
                         cpt_slug: card.querySelector('.e-cpt-slug').value.trim(),
                         cpt_name_plural: card.querySelector('.e-cpt-plural').value.trim(),
@@ -232,30 +291,19 @@ class Vettryx_WP_Architect {
                         fields: []
                     };
 
-                    const fieldRows = card.querySelectorAll('.vtx-field-row');
-                    fieldRows.forEach(row => {
+                    card.querySelectorAll('.vtx-field-row').forEach(row => {
                         const id = row.querySelector('.f-id').value.trim();
                         const label = row.querySelector('.f-label').value.trim();
                         if (id && label) {
-                            entity.fields.push({
-                                id: id,
-                                label: label,
-                                type: row.querySelector('.f-type').value
-                            });
+                            entity.fields.push({ id: id, label: label, type: row.querySelector('.f-type').value });
                         }
                     });
 
-                    // Só salva se o CPT tiver slug e nome
-                    if (entity.cpt_slug && entity.cpt_name_plural) {
-                        compiledEntities.push(entity);
-                    }
+                    if (entity.cpt_slug && entity.cpt_name_plural) compiledEntities.push(entity);
                 });
-
-                // Injeta o JSON no input hidden antes do POST nativo do WordPress agir
                 hiddenInput.value = JSON.stringify(compiledEntities);
             });
 
-            // Inicia renderizando os dados existentes
             render();
         });
         </script>
