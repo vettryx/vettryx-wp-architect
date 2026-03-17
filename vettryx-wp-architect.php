@@ -10,6 +10,7 @@
  * Vettryx Icon: dashicons-layout
  */
 
+// Segurança: Impede acesso direto ao arquivo
 if (!defined('ABSPATH')) {
     exit;
 }
