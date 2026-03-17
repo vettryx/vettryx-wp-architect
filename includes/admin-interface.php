@@ -8,24 +8,60 @@ class Vettryx_WP_Architect_Admin {
     public function __construct() {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        
+        // Hook que dispara logo após a opção ser salva no banco para fazer a migração dos dados
+        add_action('update_option_vtx_dynamic_entities', [$this, 'migrate_database_entities'], 10, 2);
     }
 
     public function add_admin_menu() {
-        add_menu_page(
-            'VETTRYX Architect',
-            'Architect',
-            'manage_options',
-            'vtx-architect',
-            [$this, 'render_admin_page'],
-            'dashicons-layout',
-            80
-        );
+        add_menu_page('VETTRYX Architect', 'Architect', 'manage_options', 'vtx-architect', [$this, 'render_admin_page'], 'dashicons-layout', 80);
     }
 
     public function register_settings() {
         register_setting('vtx_architect_settings_group', 'vtx_dynamic_entities');
     }
 
+    // ==========================================
+    // MOTOR DE MIGRAÇÃO AUTOMÁTICA DE BANCO
+    // ==========================================
+    public function migrate_database_entities($old_value, $new_value) {
+        global $wpdb;
+        $entities = json_decode($new_value, true);
+        
+        if (!is_array($entities)) return;
+
+        foreach ($entities as $e) {
+            $old_cpt = !empty($e['old_cpt_slug']) ? sanitize_title($e['old_cpt_slug']) : '';
+            $new_cpt = !empty($e['cpt_slug']) ? sanitize_title($e['cpt_slug']) : '';
+
+            // 1. Migração do Post Type e Taxonomias (Se o slug principal mudou)
+            if ($old_cpt && $new_cpt && $old_cpt !== $new_cpt) {
+                // Atualiza a tabela wp_posts
+                $wpdb->update($wpdb->posts, ['post_type' => $new_cpt], ['post_type' => $old_cpt]);
+                
+                // Atualiza a tabela wp_term_taxonomy (Categorias e Tags atreladas)
+                $wpdb->update($wpdb->term_taxonomy, ['taxonomy' => $new_cpt . '_category'], ['taxonomy' => $old_cpt . '_category']);
+                $wpdb->update($wpdb->term_taxonomy, ['taxonomy' => $new_cpt . '_tag'], ['taxonomy' => $old_cpt . '_tag']);
+            }
+
+            // 2. Migração dos Meta Boxes / Campos Personalizados
+            if (!empty($e['fields'])) {
+                foreach ($e['fields'] as $f) {
+                    $old_id = !empty($f['old_id']) ? sanitize_text_field($f['old_id']) : '';
+                    $new_id = !empty($f['id']) ? sanitize_text_field($f['id']) : '';
+
+                    if ($old_id && $new_id && $old_id !== $new_id) {
+                        // Atualiza a tabela wp_postmeta
+                        $wpdb->update($wpdb->postmeta, ['meta_key' => $new_id], ['meta_key' => $old_id]);
+                    }
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // INTERFACE VISUAL
+    // ==========================================
     public function render_admin_page() {
         $saved_json = get_option('vtx_dynamic_entities', '[]');
         if (empty($saved_json)) $saved_json = '[]';
@@ -82,6 +118,7 @@ class Vettryx_WP_Architect_Admin {
                     </div>
                     <div>
                         <label>ID do Campo <small>(Ex: link_projeto)</small></label>
+                        <input type="hidden" class="f-old-id" value="${f.id || ''}">
                         <input type="text" class="regular-text vtx-input f-id" value="${f.id || ''}" placeholder="slug_do_campo">
                         <input type="text" readonly class="vtx-sc-hint-input vtx-sc-hint" value="[vtx_${cptSlug}_${f.id || 'id'}]" onfocus="this.select();" title="Clique para copiar">
                     </div>
@@ -111,6 +148,7 @@ class Vettryx_WP_Architect_Admin {
                     <div class="vtx-grid-4">
                         <div>
                             <label>Slug do CPT <small>(Ex: projetos)</small></label>
+                            <input type="hidden" class="e-old-cpt-slug" value="${e.cpt_slug || ''}">
                             <input type="text" class="vtx-input e-cpt-slug" value="${e.cpt_slug || ''}" required>
                         </div>
                         <div>
@@ -180,7 +218,6 @@ class Vettryx_WP_Architect_Admin {
                 }
             });
 
-            // Motor de atualização em tempo real
             container.addEventListener('input', function(e) {
                 const card = e.target.closest('.vtx-entity-card');
                 if (!card) return;
@@ -210,6 +247,7 @@ class Vettryx_WP_Architect_Admin {
                 const compiledEntities = [];
                 container.querySelectorAll('.vtx-entity-card').forEach(card => {
                     const entity = {
+                        old_cpt_slug: card.querySelector('.e-old-cpt-slug').value.trim(),
                         cpt_slug: card.querySelector('.e-cpt-slug').value.trim(),
                         cpt_name_plural: card.querySelector('.e-cpt-plural').value.trim(),
                         cpt_name_singular: card.querySelector('.e-cpt-singular').value.trim(),
@@ -223,9 +261,10 @@ class Vettryx_WP_Architect_Admin {
 
                     card.querySelectorAll('.vtx-field-row').forEach(row => {
                         const id = row.querySelector('.f-id').value.trim();
+                        const old_id = row.querySelector('.f-old-id').value.trim();
                         const label = row.querySelector('.f-label').value.trim();
                         if (id && label) {
-                            entity.fields.push({ id: id, label: label, type: row.querySelector('.f-type').value });
+                            entity.fields.push({ old_id: old_id, id: id, label: label, type: row.querySelector('.f-type').value });
                         }
                     });
 
