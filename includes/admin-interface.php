@@ -270,10 +270,36 @@ class Vettryx_WP_Architect_Admin {
             });
 
             container.addEventListener('click', function(e) {
-                if (e.target.classList.contains('btn-open-icon-picker')) { e.preventDefault(); currentIconTarget = e.target.closest('.vtx-grid-4'); iconModal.style.display = 'flex'; }
-                if (e.target.classList.contains('btn-remove-entity')) { e.preventDefault(); if(confirm('Remover?')) { entities.splice(e.target.closest('.vtx-entity-card').dataset.index, 1); render(); } }
-                if (e.target.classList.contains('btn-add-field')) { e.preventDefault(); e.target.previousElementSibling.insertAdjacentHTML('beforeend', fieldTemplate({}, e.target.closest('.vtx-entity-card').querySelector('.e-cpt-slug').value.trim() || 'slug')); }
-                if (e.target.classList.contains('btn-remove-field')) { e.preventDefault(); e.target.closest('.vtx-field-row').remove(); }
+                const btnOpenIcon = e.target.closest('.btn-open-icon-picker');
+                if (btnOpenIcon) { 
+                    e.preventDefault(); 
+                    currentIconTarget = btnOpenIcon.closest('.vtx-grid-4'); 
+                    iconModal.style.display = 'flex'; 
+                }
+
+                const btnRemoveEntity = e.target.closest('.btn-remove-entity');
+                if (btnRemoveEntity) { 
+                    e.preventDefault(); 
+                    if(confirm('Remover?')) { 
+                        entities.splice(btnRemoveEntity.closest('.vtx-entity-card').dataset.index, 1); 
+                        render(); 
+                    } 
+                }
+
+                const btnAddField = e.target.closest('.btn-add-field');
+                if (btnAddField) { 
+                    e.preventDefault(); 
+                    btnAddField.previousElementSibling.insertAdjacentHTML(
+                        'beforeend', 
+                        fieldTemplate({}, btnAddField.closest('.vtx-entity-card').querySelector('.e-cpt-slug').value.trim() || 'slug')
+                    ); 
+                }
+
+                const btnRemoveField = e.target.closest('.btn-remove-field');
+                if (btnRemoveField) { 
+                    e.preventDefault(); 
+                    btnRemoveField.closest('.vtx-field-row').remove(); 
+                }
             });
 
             container.addEventListener('change', function(e) {
