@@ -1,8 +1,10 @@
 <?php
 /**
  * Vettryx WP Architect Dynamic Engine
- * * Gerencia o registro dinâmico de CPTs e Taxonomias com base nas configurações do usuário.
- * * @package Vettryx_WP_Architect
+ * 
+ * Gerencia o registro dinâmico de CPTs e Taxonomias com base nas configurações do usuário.
+ * 
+ * @package Vettryx_WP_Architect
  * @since 1.0.0
  */
 
@@ -18,8 +20,10 @@ class Vettryx_WP_Architect_Engine {
 
     public function __construct() {
         add_action('init', [$this, 'register_dynamic_entities']);
+        add_action('init', [$this, 'register_media_albums']);
         add_action('update_option_vtx_dynamic_entities', 'flush_rewrite_rules');
         add_action('admin_head', [$this, 'inject_vettryx_clean_ui']);
+        add_action('restrict_manage_posts', [$this, 'add_media_album_filter']);
         
         // Filtros para limpar e customizar os Títulos e Descrições de Arquivo
         add_filter('get_the_archive_title', [$this, 'filter_archive_title']);
@@ -32,11 +36,10 @@ class Vettryx_WP_Architect_Engine {
     /**
      * Intercepta o carregamento do editor e desativa o Gutenberg se a opção estiver marcada
      */
-    public function disable_gutenberg_conditionally($current_status, $post_type) {
-        $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
-        if (!is_array($entities)) return $current_status;
+    public function disable_gutenberg_conditionally($current_status, $post_type) {$entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
+        if (!is_array($entities)) return$current_status;
 
-        foreach ($entities as $e) {
+        foreach ($entities as$e) {
             if ($e['cpt_slug'] === $post_type && !empty($e['disable_gutenberg'])) {
                 return false; // Força o editor clássico para este CPT
             }
@@ -45,17 +48,60 @@ class Vettryx_WP_Architect_Engine {
     }
 
     /**
+     * Registra a Taxonomia de Álbuns de Mídia
+     * 
+     * Executado no hook 'init' para registrar a taxonomia de álbuns para anexos
+     */
+    public function register_media_albums() {
+        register_taxonomy('vtx_album', ['attachment'], [
+            'hierarchical'      => true,
+            'labels'            => [
+                'name'          => 'Álbuns de Mídia',
+                'singular_name' => 'Álbum',
+                'menu_name'     => 'Álbuns (Projetos)',
+                'add_new_item'  => 'Adicionar Novo Álbum',
+            ],
+            'public'            => true,
+            'show_ui'           => true,
+            'show_in_menu'      => true,
+            'show_admin_column' => true,
+            'show_in_rest'      => true,
+            'query_var'         => true,
+            'rewrite'           => ['slug' => 'album'],
+        ]);
+    }
+
+    /**
+     * Adiciona um filtro de dropdown na visualização em lista da Biblioteca de Mídia
+     */
+    public function add_media_album_filter() {
+        $screen = get_current_screen();
+        if ($screen && $screen->id === 'upload') {$selected = isset($_GET['vtx_album']) ?$_GET['vtx_album'] : '';
+            wp_dropdown_categories([
+                'show_option_all' => 'Ver Todos os Álbuns',
+                'taxonomy'        => 'vtx_album',
+                'name'            => 'vtx_album',
+                'orderby'         => 'name',
+                'selected'        => $selected,
+                'show_count'      => true,
+                'hide_empty'      => true,
+                'value_field'     => 'slug',
+            ]);
+        }
+    }
+
+    /**
      * Filtra o título da página de arquivo
-     * * @param string $title Título original da página de arquivo
+     * 
+     * @param string $title Título original da página de arquivo
      * @return string Título customizado
      */
     public function filter_archive_title($title) {
         if (is_post_type_archive()) {
-            $post_type = get_query_var('post_type');
-            $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
+            $post_type = get_query_var('post_type');$entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
             if (is_array($entities)) {
-                foreach ($entities as $e) {
-                    if ($e['cpt_slug'] === $post_type) {
+                foreach ($entities as$e) {
+                    if ($e['cpt_slug'] ===$post_type) {
                         return !empty($e['archive_title']) ? esc_html($e['archive_title']) : esc_html($e['cpt_name_plural']);
                     }
                 }
@@ -68,15 +114,15 @@ class Vettryx_WP_Architect_Engine {
 
     /**
      * Filtra a descrição da página de arquivo
-     * * @param string $description Descrição original da página de arquivo
+     * 
+     * @param string $description Descrição original da página de arquivo
      * @return string Descrição customizada
      */
     public function filter_archive_description($description) {
         if (is_post_type_archive()) {
-            $post_type = get_query_var('post_type');
-            $entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
+            $post_type = get_query_var('post_type');$entities = json_decode(get_option('vtx_dynamic_entities', '[]'), true);
             if (is_array($entities)) {
-                foreach ($entities as $e) {
+                foreach ($entities as$e) {
                     if ($e['cpt_slug'] === $post_type && !empty($e['archive_desc'])) {
                         return wpautop(wp_kses_post($e['archive_desc']));
                     }
@@ -88,18 +134,17 @@ class Vettryx_WP_Architect_Engine {
 
     /**
      * Registra as entidades dinâmicas (CPTs e Taxonomias)
-     * * Executado no hook 'init' para registrar todos os tipos de conteúdo dinâmicos
+     * 
+     * Executado no hook 'init' para registrar todos os tipos de conteúdo dinâmicos
      */
     public function register_dynamic_entities() {
         $saved_json = get_option('vtx_dynamic_entities', '[]');
         $entities = json_decode($saved_json, true);
-        if (!is_array($entities) || empty($entities)) return;
+        if (!is_array($entities) \vert{}\vert{} empty($entities)) return;
 
-        foreach ($entities as $e) {
-            if (empty($e['cpt_slug']) || empty($e['cpt_name_plural'])) continue;
-            $slug = sanitize_title($e['cpt_slug']);
-            
-            $labels = [
+        foreach ($entities as$e) {
+            if (empty($e['cpt_slug']) \vert{}\vert{} empty($e['cpt_name_plural'])) continue;
+            $slug = sanitize_title($e['cpt_slug']);$labels = [
                 'name' => esc_html($e['cpt_name_plural']), 'singular_name' => esc_html($e['cpt_name_singular']),
                 'menu_name' => esc_html($e['cpt_name_plural']), 'add_new' => 'Adicionar Novo',
                 'add_new_item' => 'Adicionar ' . esc_html($e['cpt_name_singular']),
@@ -108,8 +153,7 @@ class Vettryx_WP_Architect_Engine {
 
             // Define os suportes dinamicamente com base no toggle do Gutenberg
             $supports = ['title', 'thumbnail', 'excerpt'];
-            if (empty($e['disable_gutenberg'])) {
-                $supports[] = 'editor';
+            if (empty($e['disable_gutenberg'])) {$supports[] = 'editor';
             }
 
             $args = [
@@ -119,16 +163,16 @@ class Vettryx_WP_Architect_Engine {
                 'supports' => $supports, 'show_in_rest' => true, 
                 'rewrite' => ['slug' => $slug, 'with_front' => false],
             ];
-            register_post_type($slug, $args);
+            register_post_type($slug,$args);
 
             if (!empty($e['cat_slug']) && !empty($e['cat_name'])) {
                 $cat_slug = sanitize_title($e['cat_slug']);
-                register_taxonomy($slug . '_category', [$slug], ['hierarchical' => true, 'labels' => ['name' => esc_html($e['cat_name']), 'singular_name' => esc_html($e['cat_name']), 'menu_name' => esc_html($e['cat_name'])], 'show_ui' => true, 'show_admin_column' => true, 'query_var' => true, 'rewrite' => ['slug' => $cat_slug, 'with_front' => false], 'show_in_rest' => true]);
+                register_taxonomy($slug . '_category', [$slug], ['hierarchical' => true, 'labels' => ['name' => esc_html($e['cat_name']), 'singular_name' => esc_html($e['cat_name']), 'menu_name' => esc_html($e['cat_name'])], 'show_ui' => true, 'show_admin_column' => true, 'query_var' => true, 'rewrite' => ['slug' =>$cat_slug, 'with_front' => false], 'show_in_rest' => true]);
             }
 
             if (!empty($e['tag_slug']) && !empty($e['tag_name'])) {
                 $tag_slug = sanitize_title($e['tag_slug']);
-                register_taxonomy($slug . '_tag', [$slug], ['hierarchical' => false, 'labels' => ['name' => esc_html($e['tag_name']), 'singular_name' => esc_html($e['tag_name']), 'menu_name' => esc_html($e['tag_name'])], 'show_ui' => true, 'show_admin_column' => true, 'query_var' => true, 'rewrite' => ['slug' => $tag_slug, 'with_front' => false], 'show_in_rest' => true]);
+                register_taxonomy($slug . '_tag', [$slug], ['hierarchical' => false, 'labels' => ['name' => esc_html($e['tag_name']), 'singular_name' => esc_html($e['tag_name']), 'menu_name' => esc_html($e['tag_name'])], 'show_ui' => true, 'show_admin_column' => true, 'query_var' => true, 'rewrite' => ['slug' =>$tag_slug, 'with_front' => false], 'show_in_rest' => true]);
             }
         }
     }
@@ -144,9 +188,8 @@ class Vettryx_WP_Architect_Engine {
         if (!is_array($entities)) return;
 
         $is_clean_ui = false;
-        foreach ($entities as $e) {
-            if ($e['cpt_slug'] === $typenow && !empty($e['disable_gutenberg'])) {
-                $is_clean_ui = true;
+        foreach ($entities as$e) {
+            if ($e['cpt_slug'] ===$typenow && !empty($e['disable_gutenberg'])) {$is_clean_ui = true;
                 break;
             }
         }

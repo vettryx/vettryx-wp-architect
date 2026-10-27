@@ -22,6 +22,7 @@ class Vettryx_WP_Architect_Meta_Boxes {
         add_action('save_post', [$this, 'save_dynamic_meta_boxes']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_media_uploader']);
         add_action('admin_footer', [$this, 'render_media_uploader_js']);
+        add_action('add_attachment', [$this, 'auto_assign_media_to_album']);
         add_filter('wp_insert_post_data', [$this, 'force_dynamic_date_slug'], 10, 2);
         $this->hook_taxonomy_image_fields();
     }
@@ -272,5 +273,29 @@ class Vettryx_WP_Architect_Meta_Boxes {
         });
         </script>
         <?php
+    }
+
+    // Método para associar automaticamente imagens enviadas a um álbum baseado no título do post/projeto
+    public function auto_assign_media_to_album($attachment_id) {
+        // Verifica se o upload está sendo feito dentro de um post/projeto
+        if (isset($_REQUEST['post_id']) && !empty($_REQUEST['post_id'])) {
+            $parent_post_id = intval($_REQUEST['post_id']);
+            $parent_post = get_post($parent_post_id);
+            
+            if ($parent_post) {
+                $album_name = sanitize_text_field($parent_post->post_title);
+                
+                // Verifica se o álbum (termo) já existe. Se não, cria.
+                $term = term_exists($album_name, 'vtx_album');
+                if (!$term) {
+                    $term = wp_insert_term($album_name, 'vtx_album');
+                }
+                
+                // Associa a imagem recém-enviada ao álbum do projeto
+                if (!is_wp_error($term)) {
+                    wp_set_object_terms($attachment_id, intval($term['term_id']), 'vtx_album', true);
+                }
+            }
+        }
     }
 }
